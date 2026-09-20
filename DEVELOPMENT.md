@@ -49,8 +49,10 @@ omarchy plugin validate .
   while the popup is open and the media is playing. While dragging, the
   bar shows the dragged position and the seek is applied on release.
 - **Service id**: `BarWidget.qml` resolves the service through
-  `firstPartyServiceFor("vinicgobbi.media")`, so the id must match
-  `manifest.json`.
+  `firstPartyServiceFor("omarchy.media")`. Keep the built-in id there: the
+  shell only hands out services for `omarchy.*` ids and routes the call to
+  the enabled clone (via `omarchy.clonedFrom` in `manifest.json`). Using the
+  clone's own id returns nothing, and the widget stays hidden.
 
 ## Commits and releases
 

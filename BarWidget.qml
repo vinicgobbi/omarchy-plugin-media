@@ -7,7 +7,7 @@ BarWidget {
   id: root
   moduleName: "vinicgobbi.media"
 
-  readonly property var mediaService: bar?.shell?.firstPartyServiceFor("vinicgobbi.media")
+  readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
   readonly property var sourcePlayers: mediaService ? mediaService.sourcePlayers : []
 
