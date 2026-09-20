@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "vinicgobbi.media",
+  "name": "Media Manager",
+  "version": "0.1.0",
+  "author": "vinicgobbi",
+  "description": "MPRIS media control: left click opens the popup, right click plays/pauses",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.media"
+  },
+  "barWidget": {
+    "displayName": "Media Manager",
+    "description": "MPRIS now-playing: left click opens the popup, right click plays/pauses",
+    "category": "Media",
+    "allowMultiple": false
+  }
+}
