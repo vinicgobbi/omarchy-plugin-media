@@ -1,23 +1,25 @@
-# omarchy-plugin-media-manager
+# omarchy-plugin-media
 
 A media bar-widget for the [Omarchy](https://omarchy.org/) shell, cloned
 from the built-in `omarchy.media`. It shows what's playing over MPRIS and
 opens a popup with playback controls and a live progress bar you can seek
-with.
+with. What the widget shows in the bar is configurable.
 
 ## Features
 
-- Bar widget with the play/pause state and "title · artist"
+- Bar widget with the play/pause state and the track text
 - Popup with album art, track info and previous / play-pause / next
 - **Live progress bar** with elapsed and total time, updated in real time
-- **Seek** by clicking or dragging the bar (when the player allows it)
-- Source list to switch between players
+- **Seek** by clicking, dragging or scrolling the bar (when the player allows it)
+- Shuffle, repeat, playback speed, volume and "open player" controls
+- Source list to switch between players (Tab in the popup)
+- **Advanced options** to choose what the bar shows and how it looks
 - `media` IPC target for scripts and hotkeys
 
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/vinicgobbi/omarchy-plugin-media-manager.git --enable
+omarchy plugin add https://github.com/vinicgobbi/omarchy-plugin-media.git --enable
 ```
 
 Disable any other media widget (`omarchy.media`, `bibek.media`) so only
@@ -42,13 +44,13 @@ right click opens the popup.
   streams and players without them get no bar.
 - If the player doesn't support seeking, the bar is display-only.
 - Click anywhere on the bar to jump there, or drag; the seek is applied
-  when you release the mouse.
+  when you release the mouse. Scrolling over it seeks by 5 s.
 
 ### Popup
 
 Buttons: shuffle, previous, play/pause, next, repeat, open player and
 playback speed (each only when the player supports it), plus a volume
-slider. Scrolling over the progress bar seeks by 5 s.
+slider. The gear in the corner opens the advanced options.
 
 Keyboard, while the popup is open:
 
@@ -61,7 +63,38 @@ Keyboard, while the popup is open:
 | `n` / `p`              | Next / previous track                   |
 | `s` / `r` / `f`        | Shuffle / repeat / playback speed       |
 | `o`                    | Open the player window                  |
-| `q` / Esc              | Close the popup                         |
+| `c`                    | Open / close the advanced options       |
+| `q` / Esc              | Close the popup (or leave the options)  |
+
+## Options
+
+Open the gear in the popup for a live preview and three tabs, or edit the
+widget's entry in `~/.config/omarchy/shell.json` by hand. Only the options
+that differ from the defaults are written there:
+
+```json
+{ "id": "vinicgobbi.media", "showCover": true, "separator": "|", "dynamicWidth": true }
+```
+
+| Option           | Default  | What it does                                                        |
+| ---------------- | -------- | ------------------------------------------------------------------- |
+| `showIcon`       | `true`   | Play/pause symbol before the text                                   |
+| `showCover`      | `false`  | Small album cover before the text                                   |
+| `showTitle`      | `true`   | Track title                                                         |
+| `showArtist`     | `true`   | Track artist                                                        |
+| `showAlbum`      | `false`  | Album name                                                          |
+| `showPlayer`     | `false`  | Name of the app playing (Spotify, Chrome...)                        |
+| `showTime`       | `false`  | Elapsed / total time next to the text                               |
+| `artistFirst`    | `false`  | "artist · title" instead of "title · artist"                        |
+| `separator`      | `"·"`    | Between the pieces of text: `·`, `-`, `\|` or `/`                   |
+| `hideWhenPaused` | `false`  | Hide the widget while nothing is playing                            |
+| `dynamicWidth`   | `false`  | `true`: show the whole text and fit the widget to it                |
+| `textMode`       | `scroll` | Fixed width only: `scroll` the text or cut it (`ellipsis`) with "..." |
+| `maxWidth`       | `180`    | Fixed width only: widget width in px                                |
+| `maxChars`       | `40`     | Fixed width and `ellipsis` only: where the text is cut              |
+
+The same options are declared in the manifest's `schema`, so they also show
+up wherever Omarchy renders plugin settings.
 
 ## Uninstall
 
