@@ -75,6 +75,9 @@ BarWidget {
     property string family: ""
     property real pixelSize: 12
     property bool active: true
+    // False where a click must fall through to the widget (e.g. the only
+    // clickable thing on a vertical bar is the icon, and it opens the popup).
+    property bool clickable: true
     signal activated()
 
     implicitWidth: label.implicitWidth
@@ -88,7 +91,7 @@ BarWidget {
       textFormat: Text.PlainText
       anchors.centerIn: parent
       text: btn.glyphText
-      color: hit.containsMouse && btn.active ? Color.accent : btn.fg
+      color: hit.containsMouse && hit.enabled ? Color.accent : btn.fg
       font.family: btn.family
       font.pixelSize: btn.pixelSize
     }
@@ -98,7 +101,7 @@ BarWidget {
       anchors.fill: parent
       // A bigger target than the glyph itself: the bar is thin.
       anchors.margins: -Style.space(4)
-      enabled: btn.active
+      enabled: btn.active && btn.clickable
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onClicked: btn.activated()
@@ -263,16 +266,19 @@ BarWidget {
       onActivated: root.transport("previous")
     }
 
-    Text {
+    BarButton {
       id: glyph
-      textFormat: Text.PlainText
       anchors.verticalCenter: parent.verticalCenter
-      text: root.playIcon
+      glyphText: root.playIcon
       visible: root.prefs.showIcon || (root.barText === "" && !cover.visible && !timeLabel.visible && !prevButton.visible && !nextButton.visible)
-      color: activePlayer && activePlayer.isPlaying ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.5)
-      font.family: root.bar.fontFamily
-      font.pixelSize: Style.font.body
-      Behavior on color {
+      fg: activePlayer && activePlayer.isPlaying ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.5)
+      family: root.bar.fontFamily
+      pixelSize: Style.font.body
+      active: root.activePlayer !== null
+        && !!(root.activePlayer.canTogglePlaying || root.activePlayer.canPlay || root.activePlayer.canPause)
+      clickable: !root.bar.vertical
+      onActivated: root.transport("playPause")
+      Behavior on fg {
         enabled: !root.bar || root.bar.foregroundAnimationEnabled
         ColorAnimation { duration: 160 }
       }
