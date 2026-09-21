@@ -66,6 +66,45 @@ BarWidget {
 
   property bool popupOpen: false
 
+  // Small clickable glyph for the bar (previous / next). It only reports the
+  // click; the widget-wide MouseArea below still handles everything else.
+  component BarButton: Item {
+    id: btn
+    property string glyphText: ""
+    property color fg: "white"
+    property string family: ""
+    property real pixelSize: 12
+    property bool active: true
+    signal activated()
+
+    implicitWidth: label.implicitWidth
+    implicitHeight: label.implicitHeight
+    width: implicitWidth
+    height: implicitHeight
+    opacity: active ? 1 : 0.4
+
+    Text {
+      id: label
+      textFormat: Text.PlainText
+      anchors.centerIn: parent
+      text: btn.glyphText
+      color: hit.containsMouse && btn.active ? Color.accent : btn.fg
+      font.family: btn.family
+      font.pixelSize: btn.pixelSize
+    }
+
+    MouseArea {
+      id: hit
+      anchors.fill: parent
+      // A bigger target than the glyph itself: the bar is thin.
+      anchors.margins: -Style.space(4)
+      enabled: btn.active
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: btn.activated()
+    }
+  }
+
   readonly property var rateSteps: [0.75, 1, 1.25, 1.5, 2]
   readonly property bool rateAdjustable: activePlayer !== null && activePlayer.maxRate > activePlayer.minRate
 
@@ -196,6 +235,10 @@ BarWidget {
     id: row
     anchors.centerIn: parent
     spacing: Style.space(6)
+    // Above the widget-wide MouseArea (declared below) so the buttons get their
+    // clicks; the rest of the row has no handlers, so everything else falls
+    // through to that MouseArea.
+    z: 1
 
     Image {
       id: cover
@@ -208,12 +251,24 @@ BarWidget {
       visible: root.prefs.showCover && source !== ""
     }
 
+    BarButton {
+      id: prevButton
+      anchors.verticalCenter: parent.verticalCenter
+      visible: !root.bar.vertical && root.prefs.showPrevious
+      glyphText: "󰒮"
+      fg: root.bar.barForeground
+      family: root.bar.fontFamily
+      pixelSize: Style.font.body
+      active: root.activePlayer !== null && !!root.activePlayer.canGoPrevious
+      onActivated: root.transport("previous")
+    }
+
     Text {
       id: glyph
       textFormat: Text.PlainText
       anchors.verticalCenter: parent.verticalCenter
       text: root.playIcon
-      visible: root.prefs.showIcon || (root.barText === "" && !cover.visible && !timeLabel.visible)
+      visible: root.prefs.showIcon || (root.barText === "" && !cover.visible && !timeLabel.visible && !prevButton.visible && !nextButton.visible)
       color: activePlayer && activePlayer.isPlaying ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.5)
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
@@ -221,6 +276,18 @@ BarWidget {
         enabled: !root.bar || root.bar.foregroundAnimationEnabled
         ColorAnimation { duration: 160 }
       }
+    }
+
+    BarButton {
+      id: nextButton
+      anchors.verticalCenter: parent.verticalCenter
+      visible: !root.bar.vertical && root.prefs.showNext
+      glyphText: "󰒭"
+      fg: root.bar.barForeground
+      family: root.bar.fontFamily
+      pixelSize: Style.font.body
+      active: root.activePlayer !== null && !!root.activePlayer.canGoNext
+      onActivated: root.transport("next")
     }
 
     Item {

@@ -194,6 +194,8 @@ Column {
       readonly property int barWidth: Math.round(
         (previewCover.visible ? previewCover.width + Style.space(6) : 0)
         + (previewTime.visible ? previewTime.implicitWidth + Style.space(6) : 0)
+        + (previewPrev.visible ? previewPrev.implicitWidth + Style.space(6) : 0)
+        + (previewNext.visible ? previewNext.implicitWidth + Style.space(6) : 0)
         + (previewGlyph.visible ? previewGlyph.implicitWidth + Style.space(6) : 0)
         + (previewString === "" ? 0 : (root.fitText ? previewLabel.implicitWidth : root.prefs.maxWidth))
         + Style.space(14))
@@ -224,11 +226,33 @@ Column {
         }
 
         Text {
+          id: previewPrev
+          textFormat: Text.PlainText
+          anchors.verticalCenter: parent.verticalCenter
+          visible: root.prefs.showPrevious
+          text: "󰒮"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+        }
+
+        Text {
           id: previewGlyph
           textFormat: Text.PlainText
           anchors.verticalCenter: parent.verticalCenter
-          visible: root.prefs.showIcon || (previewBox.previewString === "" && !previewCover.visible && !previewTime.visible)
+          visible: root.prefs.showIcon || (previewBox.previewString === "" && !previewCover.visible && !previewTime.visible && !previewPrev.visible && !previewNext.visible)
           text: "󰏤"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+        }
+
+        Text {
+          id: previewNext
+          textFormat: Text.PlainText
+          anchors.verticalCenter: parent.verticalCenter
+          visible: root.prefs.showNext
+          text: "󰒭"
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
@@ -326,6 +350,14 @@ Column {
       Cell {
         fg: root.foreground; family: root.fontFamily; label: "Cover"
         ToggleSwitch { foreground: root.foreground; checked: root.prefs.showCover; onToggled: root.changed("showCover", !checked) }
+      }
+      Cell {
+        fg: root.foreground; family: root.fontFamily; label: "Previous"
+        ToggleSwitch { foreground: root.foreground; checked: root.prefs.showPrevious; onToggled: root.changed("showPrevious", !checked) }
+      }
+      Cell {
+        fg: root.foreground; family: root.fontFamily; label: "Next"
+        ToggleSwitch { foreground: root.foreground; checked: root.prefs.showNext; onToggled: root.changed("showNext", !checked) }
       }
       Cell {
         fg: root.foreground; family: root.fontFamily; label: "Title"
