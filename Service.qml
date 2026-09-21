@@ -10,6 +10,9 @@ Item {
 
   property var shell: null
   property string preferredPlayerKey: ""
+  // Player the user picked by hand (list click, Tab). It stays active even if
+  // another player is playing, until a different player starts or this one goes away.
+  property string pinnedPlayerKey: ""
   property var playerStartedAt: ({})
   property var pendingTrackOsd: null
   property int playSerial: 0
@@ -44,6 +47,15 @@ Item {
 
   function hasTrackMetadata(player) {
     return MediaModel.hasTrackMetadata(player)
+  }
+
+  // Stopped players with no track (e.g. the empty chromium instance that
+  // Spotify's embedded Chromium registers next to the real player) have
+  // nothing to show or control.
+  function isIdlePlayer(player) {
+    return !!player && !player.isPlaying
+      && player.playbackState === MprisPlaybackState.Stopped
+      && !hasTrackMetadata(player)
   }
 
   function playerCanControl(player) {
@@ -117,12 +129,15 @@ Item {
       if (playerStartedAt[key] === undefined) {
         serial += 1
         next[key] = serial
+        // A different player just started: follow the playback again.
+        if (pinnedPlayerKey && key !== pinnedPlayerKey) pinnedPlayerKey = ""
       } else {
         next[key] = playerStartedAt[key]
       }
     }
 
     if (preferredPlayerKey && !alive[preferredPlayerKey]) preferredPlayerKey = ""
+    if (pinnedPlayerKey && !alive[pinnedPlayerKey]) pinnedPlayerKey = ""
 
     playSerial = serial
     playerStartedAt = next
@@ -132,7 +147,7 @@ Item {
     var list = []
     for (var i = 0; i < players.length; i++) {
       var p = players[i]
-      if (hasMetadata(p)) list.push(p)
+      if (hasMetadata(p) && !isIdlePlayer(p)) list.push(p)
     }
 
     list.sort(function(a, b) {
@@ -152,7 +167,7 @@ Item {
     var list = []
     for (var i = 0; i < players.length; i++) {
       var p = players[i]
-      if (canCycleSource(p)) list.push(p)
+      if (canCycleSource(p) && !isIdlePlayer(p)) list.push(p)
     }
 
     list.sort(function(a, b) {
@@ -192,6 +207,9 @@ Item {
   }
 
   function selectActivePlayer() {
+    var pinned = pinnedPlayerKey ? playerForKey(pinnedPlayerKey) : null
+    if (pinned && hasMetadata(pinned)) return pinned
+
     var preferred = null
     var trackPlayer = null
     var trackProxy = null
@@ -204,7 +222,7 @@ Item {
 
     for (var i = 0; i < players.length; i++) {
       var p = players[i]
-      if (!p) continue
+      if (!p || isIdlePlayer(p)) continue
 
       var proxy = isProxyPlayer(p)
 
@@ -288,6 +306,7 @@ Item {
     var player = playerForKey(key)
     if (!player || !hasMetadata(player)) return false
     preferredPlayerKey = playerKey(player)
+    pinnedPlayerKey = preferredPlayerKey
     return true
   }
 
@@ -334,6 +353,7 @@ Item {
     var nextKey = playerKey(next)
 
     preferredPlayerKey = nextKey
+    pinnedPlayerKey = nextKey
 
     if (transferPlayback && currentWasPlaying && next && nextKey !== currentKey) {
       var nextWasPlaying = next.isPlaying
