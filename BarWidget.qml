@@ -34,9 +34,11 @@ BarWidget {
     if (bar && bar.shell)
       bar.shell.updateEntryInline(moduleName, MediaModel.entrySettings(prefsNow, settings))
   }
-  readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
-  readonly property string playerName: activePlayer ? (activePlayer.identity || activePlayer.desktopEntry || "") : ""
-  readonly property string artUrl: activePlayer && activePlayer.trackArtUrl ? activePlayer.trackArtUrl : ""
+  // Metadata comes from whatever is playing, so it is capped in length and the
+  // cover URL is restricted (see MediaModel.clip / safeArtUrl).
+  readonly property string album: activePlayer && activePlayer.trackAlbum ? MediaModel.clip(activePlayer.trackAlbum) : ""
+  readonly property string playerName: activePlayer ? MediaModel.clip(activePlayer.identity || activePlayer.desktopEntry || "") : ""
+  readonly property string artUrl: activePlayer ? MediaModel.safeArtUrl(activePlayer.trackArtUrl) : ""
   readonly property string barText: MediaModel.barLabel(
     { title: title, artist: artist, album: album, player: playerName }, prefs)
 
@@ -59,8 +61,8 @@ BarWidget {
 
   readonly property bool hasMedia: activePlayer !== null && (activePlayer.trackTitle || activePlayer.trackArtist)
   readonly property string playIcon: activePlayer && activePlayer.isPlaying ? "󰏤" : "󰐊"
-  readonly property string title: activePlayer ? (activePlayer.trackTitle || "") : ""
-  readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
+  readonly property string title: activePlayer ? MediaModel.clip(activePlayer.trackTitle) : ""
+  readonly property string artist: activePlayer ? MediaModel.clip(activePlayer.trackArtist) : ""
 
   property bool popupOpen: false
 
@@ -387,13 +389,13 @@ BarWidget {
               anchors.margins: Style.space(2)
               fillMode: Image.PreserveAspectCrop
               asynchronous: true
-              source: root.activePlayer && root.activePlayer.trackArtUrl ? root.activePlayer.trackArtUrl : ""
+              source: root.artUrl
               visible: source !== ""
             }
 
             Text {
               anchors.centerIn: parent
-              visible: !root.activePlayer || !root.activePlayer.trackArtUrl
+              visible: root.artUrl === ""
               text: "󰝚"
               color: root.bar.foreground
               font.family: root.bar.fontFamily
@@ -429,7 +431,7 @@ BarWidget {
 
             Text {
               textFormat: Text.PlainText
-              text: root.activePlayer && root.activePlayer.trackAlbum ? root.activePlayer.trackAlbum : ""
+              text: root.album
               color: Qt.darker(root.bar.foreground, 1.6)
               font.family: root.bar.fontFamily
               font.pixelSize: Style.font.caption
@@ -766,8 +768,8 @@ BarWidget {
               readonly property var player: modelData
               readonly property bool selected: root.activePlayer && player
                 && root.mediaService.playerKey(root.activePlayer) === root.mediaService.playerKey(player)
-              readonly property string sourceTitle: player ? (player.trackTitle || player.identity || player.desktopEntry || "Media source") : "Media source"
-              readonly property string sourceDetail: player && player.trackArtist ? player.trackArtist : (player && player.identity ? player.identity : "")
+              readonly property string sourceTitle: player ? MediaModel.clip(player.trackTitle || player.identity || player.desktopEntry || "Media source") : "Media source"
+              readonly property string sourceDetail: player && player.trackArtist ? MediaModel.clip(player.trackArtist) : (player && player.identity ? MediaModel.clip(player.identity) : "")
 
               width: sourceList.width
               height: sourceInner.implicitHeight + Style.space(10)

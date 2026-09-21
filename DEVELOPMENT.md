@@ -80,6 +80,15 @@ omarchy plugin validate .
   it in `Service.qml` until a different player starts playing or it goes
   away. Stopped players without a track (Spotify's embedded Chromium
   registers an empty one) are ignored.
+- **Player metadata is untrusted**: title, artist, album, player name and
+  the cover URL are set by whatever is playing, including web pages.
+  Never show them raw. Text goes through `MediaModel.clip` (300 chars max,
+  so a huge string can't stall the shell) and every `Text` that shows it
+  uses `textFormat: Text.PlainText`. The cover goes through
+  `MediaModel.safeArtUrl`, which only lets `https://` to a public host or a
+  local `file:///` path reach an `Image`; `http://`, `data:` and
+  loopback/private/`.local` hosts are dropped so a page can't make the shell
+  request internal URLs.
 - **Service id**: `BarWidget.qml` resolves the service through
   `firstPartyServiceFor("omarchy.media")`; the shell routes it to the
   enabled clone (via `omarchy.clonedFrom` in `manifest.json`).

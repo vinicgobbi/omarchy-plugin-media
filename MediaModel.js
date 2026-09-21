@@ -109,16 +109,56 @@ function trackChanged(previousSignature, player) {
 
 function labelFor(player) {
   if (!player) return ""
-  return player.trackTitle || player.identity || player.desktopEntry || ""
+  return clip(player.trackTitle || player.identity || player.desktopEntry || "")
 }
 
 function osdMessage(player, fallback) {
   if (!player) return fallback
   var label = labelFor(player)
-  if (label && player.trackArtist) return label + " - " + player.trackArtist
+  if (label && player.trackArtist) return label + " - " + clip(player.trackArtist)
   return label || fallback
 }
 
+
+// --- untrusted metadata -----------------------------------------------------
+// Everything a player reports (title, artist, cover URL...) is controlled by
+// whatever app or web page is playing, so it is limited before it is shown.
+
+var MAX_FIELD_CHARS = 300
+
+// Caps a metadata field so a huge string can't stall the shell's text layout.
+function clip(value, max) {
+  var t = String(value === undefined || value === null ? "" : value)
+  var limit = max || MAX_FIELD_CHARS
+  return t.length > limit ? t.slice(0, limit - 1) + "\u2026" : t
+}
+
+// Host names that point at this machine or the local network.
+function isPrivateHost(host) {
+  var h = String(host || "").toLowerCase()
+  if (h === "" || h === "localhost" || h.charAt(0) === "[") return true
+  if (/\.(local|localhost|internal|lan|home|corp|intranet)$/.test(h)) return true
+  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h)
+  if (!m) return false
+  var a = parseInt(m[1], 10), b = parseInt(m[2], 10)
+  return a === 0 || a === 10 || a === 127
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 100 && b >= 64 && b <= 127)
+}
+
+// Cover art URL that is safe to hand to an Image: https to a public host, or
+// a local file. Anything else (http, data:, internal hosts...) becomes "".
+// Otherwise a web page playing audio could make the shell request any URL.
+function safeArtUrl(url) {
+  var u = String(url || "")
+  if (u === "" || u.length > 2048 || /[\s\u0000-\u001f]/.test(u)) return ""
+  if (/^file:\/\/\//i.test(u)) return u
+  var m = /^https:\/\/([^\/?#:@]+)(?::(\d{1,5}))?(?:[\/?#]|$)/i.exec(u)
+  if (!m) return ""
+  return isPrivateHost(m[1]) ? "" : u
+}
 
 // --- bar widget preferences -------------------------------------------------
 
@@ -227,6 +267,9 @@ if (typeof module !== "undefined") {
     osdMessage: osdMessage,
     defaultPrefs: defaultPrefs,
     normalizePrefs: normalizePrefs,
+    clip: clip,
+    safeArtUrl: safeArtUrl,
+    isPrivateHost: isPrivateHost,
     entrySettings: entrySettings,
     ellipsize: ellipsize,
     barLabel: barLabel
