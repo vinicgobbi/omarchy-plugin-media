@@ -119,6 +119,81 @@ function osdMessage(player, fallback) {
   return label || fallback
 }
 
+
+// --- bar widget preferences -------------------------------------------------
+
+function defaultPrefs() {
+  return {
+    showIcon: true,       // play/pause glyph
+    showCover: false,     // small album art before the text
+    showTitle: true,
+    showArtist: true,
+    showAlbum: false,
+    showPlayer: false,    // name of the app playing (Spotify, Chrome...)
+    showTime: false,      // elapsed / total time
+    artistFirst: false,   // "artist · title" instead of "title · artist"
+    separator: "\u00b7",  // between the pieces of text
+    hideWhenPaused: false,
+    dynamicWidth: false,  // true: always show the whole text and fit the widget to it
+    // The next three only apply to a fixed width (dynamicWidth false):
+    textMode: "scroll",   // "scroll" (marquee) or "ellipsis" (cut at maxChars with "...")
+    maxWidth: 180,        // widget width in px
+    maxChars: 40
+  }
+}
+
+var SEPARATORS = ["\u00b7", "-", "|", "/"]
+
+function clampInt(value, min, max, fallback) {
+  var n = parseInt(value, 10)
+  if (isNaN(n)) return fallback
+  return Math.max(min, Math.min(max, n))
+}
+
+function normalizePrefs(input) {
+  var d = defaultPrefs()
+  var src = input && typeof input === "object" ? input : {}
+  function bool(name) { return typeof src[name] === "boolean" ? src[name] : d[name] }
+  return {
+    showIcon: bool("showIcon"),
+    showCover: bool("showCover"),
+    showTitle: bool("showTitle"),
+    showArtist: bool("showArtist"),
+    showAlbum: bool("showAlbum"),
+    showPlayer: bool("showPlayer"),
+    showTime: bool("showTime"),
+    artistFirst: bool("artistFirst"),
+    separator: SEPARATORS.indexOf(src.separator) !== -1 ? src.separator : d.separator,
+    hideWhenPaused: bool("hideWhenPaused"),
+    dynamicWidth: bool("dynamicWidth"),
+    textMode: src.textMode === "ellipsis" ? "ellipsis" : "scroll",
+    maxWidth: clampInt(src.maxWidth, 60, 600, d.maxWidth),
+    maxChars: clampInt(src.maxChars, 5, 200, d.maxChars)
+  }
+}
+
+function ellipsize(text, maxChars) {
+  var t = String(text || "")
+  if (maxChars <= 3 || t.length <= maxChars) return t
+  // Don't leave a separator dangling in front of the dots.
+  return t.slice(0, maxChars - 3).replace(/[\s\u00b7|\/-]+$/, "") + "..."
+}
+
+// Text shown next to the glyph in the bar, per the user's preferences.
+// `info` is { title, artist, album, player }.
+function barLabel(info, prefs) {
+  var parts = []
+  var title = prefs.showTitle && info.title ? info.title : ""
+  var artist = prefs.showArtist && info.artist ? info.artist : ""
+  if (prefs.showPlayer && info.player) parts.push(info.player)
+  var pair = prefs.artistFirst ? [artist, title] : [title, artist]
+  for (var i = 0; i < pair.length; i++) if (pair[i]) parts.push(pair[i])
+  if (prefs.showAlbum && info.album) parts.push(info.album)
+  var text = parts.join("  " + prefs.separator + "  ")
+  // Fitting the text means never shortening it.
+  return !prefs.dynamicWidth && prefs.textMode === "ellipsis" ? ellipsize(text, prefs.maxChars) : text
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     isProxyPlayer: isProxyPlayer,
@@ -137,6 +212,10 @@ if (typeof module !== "undefined") {
     trackSignature: trackSignature,
     trackChanged: trackChanged,
     labelFor: labelFor,
-    osdMessage: osdMessage
+    osdMessage: osdMessage,
+    defaultPrefs: defaultPrefs,
+    normalizePrefs: normalizePrefs,
+    ellipsize: ellipsize,
+    barLabel: barLabel
   }
 }

@@ -14,6 +14,43 @@ Item {
   // another player is playing, until a different player starts or this one goes away.
   property string pinnedPlayerKey: ""
   property var playerStartedAt: ({})
+
+  // Bar widget preferences, persisted in ~/.config/omarchy/vinicgobbi.media.json.
+  // Owned here (not in the widget) so every monitor's bar shares one copy.
+  property var prefs: MediaModel.defaultPrefs()
+
+  function setPref(name, value) {
+    var next = {}
+    for (var k in prefs) next[k] = prefs[k]
+    next[name] = value
+    applyPrefs(next)
+    prefsFile.setText(JSON.stringify(prefs, null, 2) + "\n")
+  }
+
+  function resetPrefs() {
+    applyPrefs(MediaModel.defaultPrefs())
+    prefsFile.setText(JSON.stringify(prefs, null, 2) + "\n")
+  }
+
+  function applyPrefs(raw) {
+    var next = MediaModel.normalizePrefs(raw)
+    if (JSON.stringify(next) !== JSON.stringify(prefs)) prefs = next
+  }
+
+  FileView {
+    id: prefsFile
+    path: (Quickshell.env("HOME") || "") + "/.config/omarchy/vinicgobbi.media.json"
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onLoaded: {
+      var parsed = null
+      try { parsed = JSON.parse(text()) } catch (e) { parsed = null }
+      root.applyPrefs(parsed)
+    }
+    onLoadFailed: root.applyPrefs(null)
+    onFileChanged: reload()
+  }
   property var pendingTrackOsd: null
   property int playSerial: 0
 

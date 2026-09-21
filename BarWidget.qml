@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Services.Mpris
 import qs.Ui
 import qs.Commons
+import "MediaModel.js" as MediaModel
 
 BarWidget {
   id: root
@@ -10,6 +11,28 @@ BarWidget {
 
   readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
+  readonly property var prefs: mediaService && mediaService.prefs ? mediaService.prefs : MediaModel.defaultPrefs()
+  readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
+  readonly property string playerName: activePlayer ? (activePlayer.identity || activePlayer.desktopEntry || "") : ""
+  readonly property string artUrl: activePlayer && activePlayer.trackArtUrl ? activePlayer.trackArtUrl : ""
+  readonly property string barText: MediaModel.barLabel(
+    { title: title, artist: artist, album: album, player: playerName }, prefs)
+
+  // Elapsed / total time for the bar. Empty when the player doesn't report it.
+  readonly property string timeText: {
+    var p = activePlayer
+    if (!p || !p.positionSupported) return ""
+    var elapsed = formatTime(p.position)
+    return p.lengthSupported && p.length > 0 ? elapsed + " / " + formatTime(p.length) : elapsed
+  }
+  function formatTime(seconds) {
+    var s = Math.max(0, Math.floor(seconds))
+    var h = Math.floor(s / 3600)
+    var m = Math.floor((s % 3600) / 60)
+    var sec = s % 60
+    return (h > 0 ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (sec < 10 ? "0" : "") + sec
+  }
+  property bool settingsOpen: false
   readonly property var sourcePlayers: mediaService ? mediaService.sourcePlayers : []
 
   readonly property bool hasMedia: activePlayer !== null && (activePlayer.trackTitle || activePlayer.trackArtist)
@@ -128,10 +151,21 @@ BarWidget {
   }
 
   function close() { popupOpen = false }
-  property real maxLabelWidth: 180
 
-  visible: hasMedia
-  implicitWidth: hasMedia ? row.implicitWidth + Style.space(14) : 0
+  // MPRIS doesn't push the position while playing; only poll when the bar
+  // actually shows the time.
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.shown && root.prefs.showTime && root.activePlayer !== null && root.activePlayer.isPlaying
+    onTriggered: root.activePlayer.positionChanged()
+  }
+  onPopupOpenChanged: if (!popupOpen) settingsOpen = false
+
+  readonly property bool shown: hasMedia && (!prefs.hideWhenPaused || (activePlayer !== null && activePlayer.isPlaying))
+
+  visible: shown
+  implicitWidth: shown ? row.implicitWidth + Style.space(14) : 0
   implicitHeight: barSize
 
   Row {
@@ -139,11 +173,23 @@ BarWidget {
     anchors.centerIn: parent
     spacing: Style.space(6)
 
+    Image {
+      id: cover
+      anchors.verticalCenter: parent.verticalCenter
+      width: Math.min(root.barSize - Style.space(8), Style.space(22))
+      height: width
+      fillMode: Image.PreserveAspectCrop
+      asynchronous: true
+      source: root.artUrl
+      visible: root.prefs.showCover && source !== ""
+    }
+
     Text {
       id: glyph
       textFormat: Text.PlainText
       anchors.verticalCenter: parent.verticalCenter
       text: root.playIcon
+      visible: root.prefs.showIcon || (root.barText === "" && !cover.visible && !timeLabel.visible)
       color: activePlayer && activePlayer.isPlaying ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.5)
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
@@ -155,22 +201,26 @@ BarWidget {
 
     Item {
       id: scrollClip
-      width: Math.min(root.maxLabelWidth, labelText.implicitWidth)
+      width: root.prefs.dynamicWidth ? labelText.implicitWidth : root.prefs.maxWidth
       height: glyph.height
       clip: true
       anchors.verticalCenter: parent.verticalCenter
-      visible: !root.bar.vertical && root.title !== ""
+      visible: !root.bar.vertical && root.barText !== ""
 
       Text {
         id: labelText
         textFormat: Text.PlainText
-        text: root.title + (root.artist ? "  ·  " + root.artist : "")
+        text: root.barText
         color: root.bar.barForeground
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter
+        // Fit mode shows the whole text. A fixed width either scrolls, or (cut
+        // mode) uses the shortened text, elided to the width as a safety net.
+        elide: !root.prefs.dynamicWidth && root.prefs.textMode === "ellipsis" ? Text.ElideRight : Text.ElideNone
+        width: !root.prefs.dynamicWidth && root.prefs.textMode === "ellipsis" ? scrollClip.width : implicitWidth
 
-        property bool needsScroll: implicitWidth > scrollClip.width
+        property bool needsScroll: !root.prefs.dynamicWidth && root.prefs.textMode === "scroll" && implicitWidth > scrollClip.width
 
         NumberAnimation on x {
           id: scrollAnim
@@ -180,8 +230,20 @@ BarWidget {
           from: scrollClip.width
           to: -labelText.implicitWidth
           easing.type: Easing.Linear
+          onRunningChanged: if (!running) labelText.x = 0
         }
       }
+    }
+
+    Text {
+      id: timeLabel
+      textFormat: Text.PlainText
+      anchors.verticalCenter: parent.verticalCenter
+      visible: !root.bar.vertical && root.prefs.showTime && root.timeText !== ""
+      text: root.timeText
+      color: Qt.darker(root.bar.barForeground, 1.3)
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.font.body
     }
   }
 
@@ -218,20 +280,23 @@ BarWidget {
     open: root.popupOpen
     focusTarget: keyCatcher
     contentWidth: popup.fittedContentWidth(Style.space(320))
-    contentHeight: popup.fittedContentHeight(column.implicitHeight)
+    contentHeight: popup.fittedContentHeight(root.settingsOpen ? settingsView.implicitHeight : column.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       onMoveRequested: function(dx, dy) {
+        if (root.settingsOpen) return
         if (dx !== 0) root.queueSeek(dx * 5)
         else root.adjustVolume(-dy * 0.05)
       }
-      onActivateRequested: root.transport("playPause")
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.cycleSource(direction) }
+      onActivateRequested: if (!root.settingsOpen) root.transport("playPause")
+      onCloseRequested: { if (root.settingsOpen) root.settingsOpen = false; else root.close() }
+      onTabRequested: function(direction) { if (!root.settingsOpen) root.cycleSource(direction) }
       onTextKey: function(t) {
-        if (t === "q" || t === "Q") root.close()
+        if (root.settingsOpen && t !== "q" && t !== "Q" && t !== "c" && t !== "C") return
+        if (t === "q" || t === "Q") { if (root.settingsOpen) root.settingsOpen = false; else root.close() }
+        else if (t === "c" || t === "C") root.settingsOpen = !root.settingsOpen
         else if (t === "n" || t === "N") root.transport("next")
         else if (t === "p" || t === "P") root.transport("previous")
         else if (t === "s" || t === "S") root.toggleShuffle()
@@ -240,8 +305,47 @@ BarWidget {
         else if (t === "o" || t === "O") root.openPlayer()
       }
 
+      Flickable {
+        id: settingsFlick
+        anchors.fill: parent
+        visible: root.settingsOpen
+        contentWidth: width
+        contentHeight: settingsView.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        AdvancedSettings {
+          id: settingsView
+          width: settingsFlick.width
+          prefs: root.prefs
+          foreground: root.bar.foreground
+          sampleTitle: root.title
+          sampleArtist: root.artist
+          sampleAlbum: root.album
+          samplePlayer: root.playerName
+          fontFamily: root.bar.fontFamily
+          onChanged: function(name, value) { if (root.mediaService) root.mediaService.setPref(name, value) }
+          onResetRequested: if (root.mediaService) root.mediaService.resetPrefs()
+          onBackRequested: root.settingsOpen = false
+        }
+      }
+
+      Button {
+        iconText: "󰒓"
+        z: 2
+        anchors.top: parent.top
+        anchors.right: parent.right
+        visible: !root.settingsOpen
+        foreground: root.bar.foreground
+        horizontalPadding: Style.spacing.controlPaddingX
+        verticalPadding: Style.spacing.controlPaddingY
+        tooltipText: "Advanced options"
+        onClicked: root.settingsOpen = true
+      }
+
       Column {
         id: column
+        visible: !root.settingsOpen
         anchors.fill: parent
         spacing: Style.space(10)
 
@@ -277,7 +381,7 @@ BarWidget {
 
           Column {
             spacing: Style.space(4)
-            width: parent.width - Style.space(74)
+            width: parent.width - Style.space(74) - Style.space(30)
 
             Text {
               textFormat: Text.PlainText
