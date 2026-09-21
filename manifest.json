@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "vinicgobbi.media",
   "name": "Media Manager",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "author": "vinicgobbi",
   "license": "MIT",
   "homepage": "https://github.com/vinicgobbi/omarchy-plugin-media",
@@ -27,6 +27,8 @@
     "defaultSection": "left",
     "defaults": {
       "showIcon": true,
+      "showPrevious": false,
+      "showNext": false,
       "showCover": false,
       "showTitle": true,
       "showArtist": true,
@@ -42,20 +44,129 @@
       "maxChars": 40
     },
     "schema": [
-      { "key": "showIcon", "type": "boolean", "label": "Play/pause icon", "defaultValue": true },
-      { "key": "showCover", "type": "boolean", "label": "Album cover", "description": "A small picture before the text.", "defaultValue": false },
-      { "key": "showTitle", "type": "boolean", "label": "Title", "defaultValue": true },
-      { "key": "showArtist", "type": "boolean", "label": "Artist", "defaultValue": true },
-      { "key": "showAlbum", "type": "boolean", "label": "Album", "defaultValue": false },
-      { "key": "showPlayer", "type": "boolean", "label": "Player name", "description": "The app playing, like Spotify or Chrome.", "defaultValue": false },
-      { "key": "showTime", "type": "boolean", "label": "Elapsed time", "description": "Position in the track, when the player reports it.", "defaultValue": false },
-      { "key": "artistFirst", "type": "boolean", "label": "Artist before title", "defaultValue": false },
-      { "key": "separator", "type": "enum", "label": "Separator", "description": "Between the pieces of text.", "options": ["·", "-", "|", "/"], "defaultValue": "·" },
-      { "key": "hideWhenPaused", "type": "boolean", "label": "Hide when paused", "description": "The widget disappears while nothing is playing.", "defaultValue": false },
-      { "key": "dynamicWidth", "type": "boolean", "label": "Fit the text", "description": "Show the whole text and grow or shrink the widget with it. When off, the widget keeps a fixed width.", "defaultValue": false },
-      { "key": "textMode", "type": "enum", "label": "Long text", "description": "Only used with a fixed width: scroll the text or cut it with \"...\".", "options": ["scroll", "ellipsis"], "defaultValue": "scroll" },
-      { "key": "maxWidth", "type": "integer", "label": "Width (px)", "description": "Only used with a fixed width.", "min": 60, "max": 600, "step": 20, "defaultValue": 180 },
-      { "key": "maxChars", "type": "integer", "label": "Character limit", "description": "Only used with a fixed width and \"ellipsis\".", "min": 5, "max": 200, "step": 5, "defaultValue": 40 }
+      {
+        "key": "showIcon",
+        "type": "boolean",
+        "label": "Play/pause icon",
+        "defaultValue": true
+      },
+      {
+        "key": "showPrevious",
+        "type": "boolean",
+        "label": "Previous button",
+        "description": "A clickable \"previous track\" button in the bar.",
+        "defaultValue": false
+      },
+      {
+        "key": "showNext",
+        "type": "boolean",
+        "label": "Next button",
+        "description": "A clickable \"next track\" button in the bar.",
+        "defaultValue": false
+      },
+      {
+        "key": "showCover",
+        "type": "boolean",
+        "label": "Album cover",
+        "description": "A small picture before the text.",
+        "defaultValue": false
+      },
+      {
+        "key": "showTitle",
+        "type": "boolean",
+        "label": "Title",
+        "defaultValue": true
+      },
+      {
+        "key": "showArtist",
+        "type": "boolean",
+        "label": "Artist",
+        "defaultValue": true
+      },
+      {
+        "key": "showAlbum",
+        "type": "boolean",
+        "label": "Album",
+        "defaultValue": false
+      },
+      {
+        "key": "showPlayer",
+        "type": "boolean",
+        "label": "Player name",
+        "description": "The app playing, like Spotify or Chrome.",
+        "defaultValue": false
+      },
+      {
+        "key": "showTime",
+        "type": "boolean",
+        "label": "Elapsed time",
+        "description": "Position in the track, when the player reports it.",
+        "defaultValue": false
+      },
+      {
+        "key": "artistFirst",
+        "type": "boolean",
+        "label": "Artist before title",
+        "defaultValue": false
+      },
+      {
+        "key": "separator",
+        "type": "enum",
+        "label": "Separator",
+        "description": "Between the pieces of text.",
+        "options": [
+          "·",
+          "-",
+          "|",
+          "/"
+        ],
+        "defaultValue": "·"
+      },
+      {
+        "key": "hideWhenPaused",
+        "type": "boolean",
+        "label": "Hide when paused",
+        "description": "The widget disappears while nothing is playing.",
+        "defaultValue": false
+      },
+      {
+        "key": "dynamicWidth",
+        "type": "boolean",
+        "label": "Fit the text",
+        "description": "Show the whole text and grow or shrink the widget with it. When off, the widget keeps a fixed width.",
+        "defaultValue": false
+      },
+      {
+        "key": "textMode",
+        "type": "enum",
+        "label": "Long text",
+        "description": "Only used with a fixed width: scroll the text or cut it with \"...\".",
+        "options": [
+          "scroll",
+          "ellipsis"
+        ],
+        "defaultValue": "scroll"
+      },
+      {
+        "key": "maxWidth",
+        "type": "integer",
+        "label": "Width (px)",
+        "description": "Only used with a fixed width.",
+        "min": 60,
+        "max": 600,
+        "step": 20,
+        "defaultValue": 180
+      },
+      {
+        "key": "maxChars",
+        "type": "integer",
+        "label": "Character limit",
+        "description": "Only used with a fixed width and \"ellipsis\".",
+        "min": 5,
+        "max": 200,
+        "step": 5,
+        "defaultValue": 40
+      }
     ]
   }
 }

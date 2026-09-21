@@ -37,6 +37,15 @@ one media service is active.
 | Scroll up        | Previous track       |
 | Scroll down      | Next track           |
 
+The play/pause icon in the bar is itself a button: a left click on it plays
+or pauses (a left click anywhere else on the widget still opens the popup).
+On a vertical bar the icon is the whole widget, so there it just opens the
+popup.
+
+With the `showPrevious` / `showNext` options on, the bar also gets small
+previous / next buttons next to the icon; clicking them skips tracks. They
+dim when the player can't go that way and are hidden on a vertical bar.
+
 This is the inverse of `omarchy.media`, where left click plays/pauses and
 right click opens the popup.
 
@@ -81,6 +90,8 @@ that differ from the defaults are written there:
 | Option           | Default  | What it does                                                        |
 | ---------------- | -------- | ------------------------------------------------------------------- |
 | `showIcon`       | `true`   | Play/pause symbol before the text                                   |
+| `showPrevious`   | `false`  | Clickable "previous track" button next to the icon                  |
+| `showNext`       | `false`  | Clickable "next track" button next to the icon                      |
 | `showCover`      | `false`  | Small album cover before the text                                   |
 | `showTitle`      | `true`   | Track title                                                         |
 | `showArtist`     | `true`   | Track artist                                                        |

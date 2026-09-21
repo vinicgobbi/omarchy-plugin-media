@@ -62,6 +62,15 @@ omarchy plugin validate .
 - **Keep the option lists in sync**: `MediaModel.defaultPrefs()` and the
   manifest's `barWidget.defaults` / `schema` describe the same options. Add
   or change one, change the others.
+- **Bar buttons and the widget MouseArea**: the widget-wide `MouseArea`
+  (popup / play-pause / next / wheel) is declared after the icon `Row`, so
+  it would swallow clicks meant for the play/pause icon and the previous /
+  next buttons. The `Row` therefore has `z: 1`, and only the `BarButton`s
+  have handlers (left button only); clicks on anything else in the row, and
+  right / middle clicks, fall through to that `MouseArea`. Buttons go
+  through `transport(...)` like every other action, so they are rate-limited.
+  On a vertical bar the icon is the whole widget, so it is not clickable
+  there (`clickable: false`) and a click opens the popup instead.
 - **Fit vs fixed width**: with `dynamicWidth` the widget shows the whole
   text and never scrolls or cuts it. Scrolling and cutting (`textMode`,
   `maxWidth`, `maxChars`) only apply to a fixed width.

@@ -165,6 +165,8 @@ function safeArtUrl(url) {
 function defaultPrefs() {
   return {
     showIcon: true,       // play/pause glyph
+    showPrevious: false,  // clickable "previous track" button next to the icon
+    showNext: false,      // clickable "next track" button next to the icon
     showCover: false,     // small album art before the text
     showTitle: true,
     showArtist: true,
@@ -196,6 +198,8 @@ function normalizePrefs(input) {
   function bool(name) { return typeof src[name] === "boolean" ? src[name] : d[name] }
   return {
     showIcon: bool("showIcon"),
+    showPrevious: bool("showPrevious"),
+    showNext: bool("showNext"),
     showCover: bool("showCover"),
     showTitle: bool("showTitle"),
     showArtist: bool("showArtist"),
