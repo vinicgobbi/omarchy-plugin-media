@@ -234,6 +234,12 @@ BarWidget {
   implicitWidth: shown ? row.implicitWidth + Style.space(14) : 0
   implicitHeight: barSize
 
+  // Size of the mark the bar draws under (or beside) the widget while its popup
+  // is open. Without these hints the bar draws about half the widget's width,
+  // which stops well short of the text; report the full extent instead.
+  readonly property real openPanelIndicatorWidth: implicitWidth
+  readonly property real openPanelIndicatorHeight: implicitHeight
+
   Row {
     id: row
     anchors.centerIn: parent
