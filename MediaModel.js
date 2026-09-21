@@ -172,6 +172,18 @@ function normalizePrefs(input) {
   }
 }
 
+// What to store on the widget's entry in shell.json: only the options that
+// differ from the defaults, plus any keys of the existing entry that aren't
+// ours (so we never drop settings we don't know about).
+function entrySettings(prefs, existing) {
+  var d = defaultPrefs()
+  var out = {}
+  var src = existing && typeof existing === "object" ? existing : {}
+  for (var k in src) if (!(k in d) && k !== "id") out[k] = src[k]
+  for (var name in d) if (prefs[name] !== d[name]) out[name] = prefs[name]
+  return out
+}
+
 function ellipsize(text, maxChars) {
   var t = String(text || "")
   if (maxChars <= 3 || t.length <= maxChars) return t
@@ -215,6 +227,7 @@ if (typeof module !== "undefined") {
     osdMessage: osdMessage,
     defaultPrefs: defaultPrefs,
     normalizePrefs: normalizePrefs,
+    entrySettings: entrySettings,
     ellipsize: ellipsize,
     barLabel: barLabel
   }

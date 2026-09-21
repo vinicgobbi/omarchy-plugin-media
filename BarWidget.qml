@@ -11,7 +11,29 @@ BarWidget {
 
   readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
-  readonly property var prefs: mediaService && mediaService.prefs ? mediaService.prefs : MediaModel.defaultPrefs()
+  // Options live inline on this widget's entry in shell.json (`settings`, injected
+  // by the bar). `pendingPrefs` shows a change right away and is dropped once the
+  // shell has reloaded the file and handed us the new settings.
+  property var pendingPrefs: null
+  readonly property var prefs: pendingPrefs ? pendingPrefs : MediaModel.normalizePrefs(settings)
+  onSettingsChanged: pendingPrefs = null
+
+  function setPref(name, value) {
+    var next = {}
+    for (var k in prefs) next[k] = prefs[k]
+    next[name] = value
+    savePrefs(next)
+  }
+
+  // An entry without our keys means "all defaults", so a reset just clears them.
+  function resetPrefs() { savePrefs(MediaModel.defaultPrefs()) }
+
+  function savePrefs(next) {
+    var prefsNow = MediaModel.normalizePrefs(next)
+    pendingPrefs = prefsNow
+    if (bar && bar.shell)
+      bar.shell.updateEntryInline(moduleName, MediaModel.entrySettings(prefsNow, settings))
+  }
   readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
   readonly property string playerName: activePlayer ? (activePlayer.identity || activePlayer.desktopEntry || "") : ""
   readonly property string artUrl: activePlayer && activePlayer.trackArtUrl ? activePlayer.trackArtUrl : ""
@@ -324,8 +346,8 @@ BarWidget {
           sampleAlbum: root.album
           samplePlayer: root.playerName
           fontFamily: root.bar.fontFamily
-          onChanged: function(name, value) { if (root.mediaService) root.mediaService.setPref(name, value) }
-          onResetRequested: if (root.mediaService) root.mediaService.resetPrefs()
+          onChanged: function(name, value) { root.setPref(name, value) }
+          onResetRequested: root.resetPrefs()
           onBackRequested: root.settingsOpen = false
         }
       }
