@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Services.Mpris
 import qs.Ui
 import qs.Commons
 
@@ -17,6 +18,114 @@ BarWidget {
   readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
 
   property bool popupOpen: false
+
+  readonly property var rateSteps: [0.75, 1, 1.25, 1.5, 2]
+  readonly property bool rateAdjustable: activePlayer !== null && activePlayer.maxRate > activePlayer.minRate
+
+  function seekBy(seconds) {
+    var p = activePlayer
+    if (!p || !p.canSeek || !p.positionSupported || !p.lengthSupported || p.length <= 0) return
+    p.position = Math.max(0, Math.min(p.length, p.position + seconds))
+    p.positionChanged()
+  }
+
+  function adjustVolume(delta) {
+    var p = activePlayer
+    if (!p || !p.volumeSupported) return
+    var base = pendingVolume >= 0 ? pendingVolume : p.volume
+    queueVolume(Math.max(0, Math.min(1, base + delta)))
+  }
+
+  function cycleRate() {
+    var p = activePlayer
+    if (!p || !rateAdjustable) return
+    var steps = rateSteps.filter(function(r) { return r >= p.minRate && r <= p.maxRate })
+    if (steps.length === 0) return
+    var next = steps[0]
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i] > p.rate + 0.001) { next = steps[i]; break }
+    }
+    p.rate = next
+  }
+
+  function cycleRepeat() {
+    var p = activePlayer
+    if (!p || !p.loopSupported) return
+    // off -> repeat playlist -> repeat track -> off
+    p.loopState = p.loopState === MprisLoopState.None ? MprisLoopState.Playlist
+      : (p.loopState === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None)
+  }
+
+  function toggleShuffle() {
+    var p = activePlayer
+    if (p && p.shuffleSupported) p.shuffle = !p.shuffle
+  }
+
+  // Tab / Shift+Tab: pick which player the popup manages, following the
+  // order of the source list. Playback is left alone.
+  function cycleSource(direction) {
+    var list = sourcePlayers
+    if (!mediaService || !list || list.length < 2) return
+    var activeKey = mediaService.playerKey(activePlayer)
+    var index = 0
+    for (var i = 0; i < list.length; i++) {
+      if (mediaService.playerKey(list[i]) === activeKey) { index = i; break }
+    }
+    var next = list[(index + direction + list.length) % list.length]
+    mediaService.selectPlayer(mediaService.playerKey(next))
+  }
+
+  function openPlayer() {
+    var p = activePlayer
+    if (!p || !p.canRaise) return
+    p.raise()
+    popupOpen = false
+  }
+
+  // Every action is a D-Bus call to the player. Bursts (wheel notches, double
+  // clicks, key repeat) make players like Spotify stall, and isPlaying lags the
+  // real state, so a fast second play/pause would repeat the first one. Drop
+  // actions that arrive too soon after the previous one.
+  property double lastActionAt: 0
+  function transport(action, minGapMs) {
+    if (!mediaService || !activePlayer) return
+    var now = Date.now()
+    if (now - lastActionAt < (minGapMs || 200)) return
+    lastActionAt = now
+    mediaService.runAction(action, false, mediaService.playerKey(activePlayer))
+  }
+
+  // Wheel seeks and volume drags fire per event; batch them into one call.
+  property real pendingSeek: 0
+  Timer {
+    id: seekFlush
+    interval: 150
+    onTriggered: {
+      var d = root.pendingSeek
+      root.pendingSeek = 0
+      if (d !== 0) root.seekBy(d)
+    }
+  }
+  function queueSeek(seconds) {
+    pendingSeek += seconds
+    if (!seekFlush.running) seekFlush.start()
+  }
+
+  property real pendingVolume: -1
+  Timer {
+    id: volumeFlush
+    interval: 60
+    onTriggered: root.flushVolume()
+  }
+  function flushVolume() {
+    volumeFlush.stop()
+    if (pendingVolume >= 0 && activePlayer && activePlayer.volumeSupported) activePlayer.volume = pendingVolume
+    pendingVolume = -1
+  }
+  function queueVolume(value) {
+    pendingVolume = value
+    if (!volumeFlush.running) volumeFlush.start()
+  }
 
   function close() { popupOpen = false }
   property real maxLabelWidth: 180
@@ -85,340 +194,516 @@ BarWidget {
     onClicked: function(mouse) {
       if (!root.activePlayer) return
       if (mouse.button === Qt.MiddleButton) {
-        if (root.mediaService) root.mediaService.runAction("next", false)
+        root.transport("next")
       } else if (mouse.button === Qt.RightButton) {
-        if (root.mediaService) root.mediaService.runAction("playPause", false)
+        root.transport("playPause")
       } else {
         root.popupOpen = !root.popupOpen
       }
     }
     onWheel: function(wheel) {
       if (!root.activePlayer) return
-      if (wheel.angleDelta.y > 0 && root.mediaService) root.mediaService.runAction("previous", false)
-      else if (wheel.angleDelta.y < 0 && root.mediaService) root.mediaService.runAction("next", false)
+      if (wheel.angleDelta.y > 0) root.transport("previous", 350)
+      else if (wheel.angleDelta.y < 0) root.transport("next", 350)
     }
     onEntered: if (root.bar) root.bar.showTooltip(root, root.hasMedia ? (root.title + (root.artist ? " — " + root.artist : "")) : "")
     onExited: if (root.bar) root.bar.hideTooltip(root)
   }
 
-  PopupCard {
+  KeyboardPanel {
     id: popup
     anchorItem: root
     bar: root.bar
     owner: root
     open: root.popupOpen
+    focusTarget: keyCatcher
     contentWidth: popup.fittedContentWidth(Style.space(320))
     contentHeight: popup.fittedContentHeight(column.implicitHeight)
 
-    Column {
-      id: column
+    PanelKeyCatcher {
+      id: keyCatcher
       anchors.fill: parent
-      spacing: Style.space(10)
+      onMoveRequested: function(dx, dy) {
+        if (dx !== 0) root.queueSeek(dx * 5)
+        else root.adjustVolume(-dy * 0.05)
+      }
+      onActivateRequested: root.transport("playPause")
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.cycleSource(direction) }
+      onTextKey: function(t) {
+        if (t === "q" || t === "Q") root.close()
+        else if (t === "n" || t === "N") root.transport("next")
+        else if (t === "p" || t === "P") root.transport("previous")
+        else if (t === "s" || t === "S") root.toggleShuffle()
+        else if (t === "r" || t === "R") root.cycleRepeat()
+        else if (t === "f" || t === "F") root.cycleRate()
+        else if (t === "o" || t === "O") root.openPlayer()
+      }
 
-      Row {
+      Column {
+        id: column
+        anchors.fill: parent
         spacing: Style.space(10)
-        width: parent.width
 
-        BorderSurface {
-          width: Style.space(64)
-          height: Style.space(64)
-          radius: Style.spacing.labelGap
-          color: Style.normalFillFor(root.bar.foreground, Color.accent)
-          borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+        Row {
+          spacing: Style.space(10)
+          width: parent.width
 
-          Image {
-            anchors.fill: parent
-            anchors.margins: Style.space(2)
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            source: root.activePlayer && root.activePlayer.trackArtUrl ? root.activePlayer.trackArtUrl : ""
-            visible: source !== ""
+          BorderSurface {
+            width: Style.space(64)
+            height: Style.space(64)
+            radius: Style.spacing.labelGap
+            color: Style.normalFillFor(root.bar.foreground, Color.accent)
+            borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+
+            Image {
+              anchors.fill: parent
+              anchors.margins: Style.space(2)
+              fillMode: Image.PreserveAspectCrop
+              asynchronous: true
+              source: root.activePlayer && root.activePlayer.trackArtUrl ? root.activePlayer.trackArtUrl : ""
+              visible: source !== ""
+            }
+
+            Text {
+              anchors.centerIn: parent
+              visible: !root.activePlayer || !root.activePlayer.trackArtUrl
+              text: "󰝚"
+              color: root.bar.foreground
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.displayLarge
+            }
           }
 
-          Text {
-            anchors.centerIn: parent
-            visible: !root.activePlayer || !root.activePlayer.trackArtUrl
-            text: "󰝚"
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.displayLarge
+          Column {
+            spacing: Style.space(4)
+            width: parent.width - Style.space(74)
+
+            Text {
+              textFormat: Text.PlainText
+              text: root.title || "Nothing playing"
+              color: root.bar.foreground
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+              elide: Text.ElideRight
+              width: parent.width
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: root.artist
+              color: Qt.darker(root.bar.foreground, 1.3)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+              width: parent.width
+              visible: text !== ""
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: root.activePlayer && root.activePlayer.trackAlbum ? root.activePlayer.trackAlbum : ""
+              color: Qt.darker(root.bar.foreground, 1.6)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
+              width: parent.width
+              visible: text !== ""
+            }
           }
         }
 
         Column {
-          spacing: Style.space(4)
-          width: parent.width - Style.space(74)
-
-          Text {
-            textFormat: Text.PlainText
-            text: root.title || "Nothing playing"
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-            elide: Text.ElideRight
-            width: parent.width
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            text: root.artist
-            color: Qt.darker(root.bar.foreground, 1.3)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            elide: Text.ElideRight
-            width: parent.width
-            visible: text !== ""
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            text: root.activePlayer && root.activePlayer.trackAlbum ? root.activePlayer.trackAlbum : ""
-            color: Qt.darker(root.bar.foreground, 1.6)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
-            width: parent.width
-            visible: text !== ""
-          }
-        }
-      }
-
-      Column {
-        id: progress
-        width: parent.width
-        spacing: Style.space(4)
-
-        readonly property bool available: root.activePlayer !== null
-          && root.activePlayer.lengthSupported && root.activePlayer.positionSupported
-          && root.activePlayer.length > 0
-        readonly property bool seekable: available && root.activePlayer.canSeek
-        readonly property real length: available ? root.activePlayer.length : 0
-        readonly property real position: available ? Math.max(0, Math.min(length, root.activePlayer.position)) : 0
-        property bool dragging: false
-        property real dragPosition: 0
-        readonly property real shown: dragging ? dragPosition : position
-
-        visible: available
-
-        function format(seconds) {
-          var s = Math.max(0, Math.floor(seconds))
-          var h = Math.floor(s / 3600)
-          var m = Math.floor((s % 3600) / 60)
-          var sec = s % 60
-          var mm = (h > 0 && m < 10 ? "0" : "") + m
-          return (h > 0 ? h + ":" : "") + mm + ":" + (sec < 10 ? "0" : "") + sec
-        }
-
-        // MPRIS does not push position updates while playing, so ask for a
-        // fresh position several times per second to keep the bar moving smoothly.
-        Timer {
-          interval: 250
-          repeat: true
-          triggeredOnStart: true
-          running: root.popupOpen && progress.available && !progress.dragging
-            && root.activePlayer.isPlaying
-          onTriggered: root.activePlayer.positionChanged()
-        }
-
-        // Paused players don't tick, but still refresh once when the popup opens
-        // or the track changes so the bar never shows a stale time.
-        Connections {
-          target: root
-          function onPopupOpenChanged() {
-            if (root.popupOpen && root.activePlayer) root.activePlayer.positionChanged()
-          }
-        }
-
-        Item {
-          id: seekBar
+          id: progress
           width: parent.width
-          height: Style.space(16)
+          spacing: Style.space(4)
 
-          function seekTo(x) {
-            progress.dragPosition = Math.max(0, Math.min(1, x / width)) * progress.length
+          readonly property bool available: root.activePlayer !== null
+            && root.activePlayer.lengthSupported && root.activePlayer.positionSupported
+            && root.activePlayer.length > 0
+          readonly property bool seekable: available && root.activePlayer.canSeek
+          readonly property real length: available ? root.activePlayer.length : 0
+          readonly property real position: available ? Math.max(0, Math.min(length, root.activePlayer.position)) : 0
+          property bool dragging: false
+          property real dragPosition: 0
+          readonly property real shown: dragging ? dragPosition : position
+
+          visible: available
+
+          function format(seconds) {
+            var s = Math.max(0, Math.floor(seconds))
+            var h = Math.floor(s / 3600)
+            var m = Math.floor((s % 3600) / 60)
+            var sec = s % 60
+            var mm = (h > 0 && m < 10 ? "0" : "") + m
+            return (h > 0 ? h + ":" : "") + mm + ":" + (sec < 10 ? "0" : "") + sec
           }
 
-          Rectangle {
-            id: track
-            anchors.verticalCenter: parent.verticalCenter
+          // MPRIS does not push position updates while playing, so ask for a
+          // fresh position several times per second to keep the bar moving smoothly.
+          Timer {
+            interval: 250
+            repeat: true
+            triggeredOnStart: true
+            running: root.popupOpen && progress.available && !progress.dragging
+              && root.activePlayer.isPlaying
+            onTriggered: root.activePlayer.positionChanged()
+          }
+
+          // Paused players don't tick, but still refresh once when the popup opens
+          // or the track changes so the bar never shows a stale time.
+          Connections {
+            target: root
+            function onPopupOpenChanged() {
+              if (root.popupOpen && root.activePlayer) root.activePlayer.positionChanged()
+            }
+          }
+
+          Item {
+            id: seekBar
             width: parent.width
-            height: Style.space(4)
-            radius: height / 2
-            color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.2)
+            height: Style.space(16)
+
+            function seekTo(x) {
+              progress.dragPosition = Math.max(0, Math.min(1, x / width)) * progress.length
+            }
 
             Rectangle {
-              width: progress.length > 0 ? parent.width * progress.shown / progress.length : 0
-              height: parent.height
-              radius: parent.radius
-              color: Color.accent
-            }
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            enabled: progress.seekable
-            cursorShape: progress.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onPressed: function(mouse) {
-              progress.dragging = true
-              seekBar.seekTo(mouse.x)
-            }
-            onPositionChanged: function(mouse) {
-              if (progress.dragging) seekBar.seekTo(mouse.x)
-            }
-            onReleased: {
-              if (progress.dragging && root.activePlayer) root.activePlayer.position = progress.dragPosition
-              progress.dragging = false
-            }
-            onCanceled: progress.dragging = false
-          }
-        }
-
-        Item {
-          width: parent.width
-          height: elapsed.implicitHeight
-
-          Text {
-            id: elapsed
-            textFormat: Text.PlainText
-            anchors.left: parent.left
-            text: progress.format(progress.shown)
-            color: Qt.darker(root.bar.foreground, 1.3)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            anchors.right: parent.right
-            text: progress.format(progress.length)
-            color: Qt.darker(root.bar.foreground, 1.3)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-          }
-        }
-      }
-
-      Row {
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Style.space(6)
-
-        Button {
-          iconText: "󰒮"
-          foreground: root.bar.foreground
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          enabled: root.activePlayer && root.activePlayer.canGoPrevious
-          opacity: enabled ? 1.0 : 0.4
-          onClicked: if (root.mediaService) root.mediaService.runAction("previous", false, root.mediaService.playerKey(root.activePlayer))
-        }
-
-        Button {
-          iconText: root.activePlayer && root.activePlayer.isPlaying ? "󰏤" : "󰐊"
-          foreground: root.bar.foreground
-          horizontalPadding: Style.spacing.panelGap
-          verticalPadding: Style.spacing.controlPaddingY
-          iconSize: Style.font.iconLarge
-          enabled: root.activePlayer && (root.activePlayer.canTogglePlaying || root.activePlayer.canPlay || root.activePlayer.canPause)
-          opacity: enabled ? 1.0 : 0.4
-          onClicked: if (root.mediaService) root.mediaService.runAction("playPause", false, root.mediaService.playerKey(root.activePlayer))
-        }
-
-        Button {
-          iconText: "󰒭"
-          foreground: root.bar.foreground
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          enabled: root.activePlayer && root.activePlayer.canGoNext
-          opacity: enabled ? 1.0 : 0.4
-          onClicked: if (root.mediaService) root.mediaService.runAction("next", false, root.mediaService.playerKey(root.activePlayer))
-        }
-      }
-
-      PanelSeparator {
-        visible: root.sourcePlayers.length > 1
-        foreground: root.bar.foreground
-      }
-
-      Column {
-        id: sourceList
-        visible: root.sourcePlayers.length > 1
-        width: parent.width
-        spacing: Style.space(4)
-
-        Repeater {
-          model: root.sourcePlayers
-
-          BorderSurface {
-            id: sourceRow
-            required property var modelData
-
-            readonly property var player: modelData
-            readonly property bool selected: root.activePlayer && player
-              && root.mediaService.playerKey(root.activePlayer) === root.mediaService.playerKey(player)
-            readonly property string sourceTitle: player ? (player.trackTitle || player.identity || player.desktopEntry || "Media source") : "Media source"
-            readonly property string sourceDetail: player && player.trackArtist ? player.trackArtist : (player && player.identity ? player.identity : "")
-
-            width: sourceList.width
-            height: sourceInner.implicitHeight + Style.space(10)
-            radius: Style.spacing.labelGap
-            color: selected ? Style.selectedFillFor(root.bar.foreground, Color.accent) : "transparent"
-            borderSpec: selected ? Border.controlSpec("normal", root.bar.foreground, Color.accent) : Border.none()
-
-            Row {
-              id: sourceInner
-              anchors.left: parent.left
-              anchors.right: parent.right
+              id: track
               anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: sourceRow.borderLeft + Style.space(8)
-              anchors.rightMargin: sourceRow.borderRight + Style.space(8)
-              spacing: Style.space(8)
+              width: parent.width
+              height: Style.space(4)
+              radius: height / 2
+              color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.2)
 
-              Text {
-                textFormat: Text.PlainText
-                text: sourceRow.player && sourceRow.player.isPlaying ? "󰏤" : "󰐊"
-                color: root.bar.foreground
-                font.family: root.bar.fontFamily
-                font.pixelSize: Style.font.body
-                width: Style.space(18)
-                horizontalAlignment: Text.AlignHCenter
-                anchors.verticalCenter: parent.verticalCenter
+              Rectangle {
+                width: progress.length > 0 ? parent.width * progress.shown / progress.length : 0
+                height: parent.height
+                radius: parent.radius
+                color: Color.accent
               }
+            }
 
-              Column {
-                width: parent.width - Style.space(26)
-                spacing: Style.space(1)
-                anchors.verticalCenter: parent.verticalCenter
+            // Highlighted knob at the current position; grows while dragging.
+            Rectangle {
+              property real size: Style.space(progress.dragging ? 16 : 12)
+              width: size
+              height: size
+              radius: size / 2
+              anchors.verticalCenter: parent.verticalCenter
+              x: Math.max(0, Math.min(seekBar.width - size,
+                (progress.length > 0 ? seekBar.width * progress.shown / progress.length : 0) - size / 2))
+              color: Color.accent
+              border.width: Style.space(2)
+              border.color: root.bar.foreground
 
-                Text {
-                  textFormat: Text.PlainText
-                  text: sourceRow.sourceTitle
-                  color: root.bar.foreground
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: sourceRow.selected
-                  elide: Text.ElideRight
-                  width: parent.width
-                }
-
-                Text {
-                  textFormat: Text.PlainText
-                  text: sourceRow.sourceDetail
-                  color: Qt.darker(root.bar.foreground, 1.5)
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: Style.font.caption
-                  elide: Text.ElideRight
-                  width: parent.width
-                  visible: text !== ""
-                }
+              Behavior on size {
+                NumberAnimation { duration: 100 }
               }
             }
 
             MouseArea {
               anchors.fill: parent
-              hoverEnabled: true
+              enabled: progress.seekable
+              cursorShape: progress.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onPressed: function(mouse) {
+                progress.dragging = true
+                seekBar.seekTo(mouse.x)
+              }
+              onPositionChanged: function(mouse) {
+                if (progress.dragging) seekBar.seekTo(mouse.x)
+              }
+              onReleased: {
+                if (progress.dragging && root.activePlayer) root.activePlayer.position = progress.dragPosition
+                progress.dragging = false
+              }
+              onCanceled: progress.dragging = false
+              onWheel: function(wheel) {
+                root.queueSeek(wheel.angleDelta.y > 0 ? 5 : -5)
+              }
+            }
+          }
+
+          Item {
+            width: parent.width
+            height: elapsed.implicitHeight
+
+            Text {
+              id: elapsed
+              textFormat: Text.PlainText
+              anchors.left: parent.left
+              text: progress.format(progress.shown)
+              color: Qt.darker(root.bar.foreground, 1.3)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              anchors.right: parent.right
+              text: progress.format(progress.length)
+              color: Qt.darker(root.bar.foreground, 1.3)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
+
+        Row {
+          anchors.horizontalCenter: parent.horizontalCenter
+          spacing: Style.space(6)
+
+          Button {
+            iconText: "󰒝"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            visible: !!root.activePlayer && root.activePlayer.shuffleSupported
+            selected: visible && root.activePlayer.shuffle
+            tooltipText: "Shuffle"
+            onClicked: root.toggleShuffle()
+          }
+
+          Button {
+            iconText: "󰒮"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            enabled: root.activePlayer && root.activePlayer.canGoPrevious
+            opacity: enabled ? 1.0 : 0.4
+            onClicked: root.transport("previous")
+          }
+
+          Button {
+            iconText: root.activePlayer && root.activePlayer.isPlaying ? "󰏤" : "󰐊"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.panelGap
+            verticalPadding: Style.spacing.controlPaddingY
+            iconSize: Style.font.iconLarge
+            enabled: root.activePlayer && (root.activePlayer.canTogglePlaying || root.activePlayer.canPlay || root.activePlayer.canPause)
+            opacity: enabled ? 1.0 : 0.4
+            onClicked: root.transport("playPause")
+          }
+
+          Button {
+            iconText: "󰒭"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            enabled: root.activePlayer && root.activePlayer.canGoNext
+            opacity: enabled ? 1.0 : 0.4
+            onClicked: root.transport("next")
+          }
+
+          Button {
+            iconText: root.activePlayer && root.activePlayer.loopState === MprisLoopState.Track ? "󰑘" : "󰑖"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            visible: !!root.activePlayer && root.activePlayer.loopSupported
+            selected: visible && root.activePlayer.loopState !== MprisLoopState.None
+            tooltipText: "Repeat"
+            onClicked: root.cycleRepeat()
+          }
+
+          Button {
+            iconText: "󰏌"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            visible: !!root.activePlayer && root.activePlayer.canRaise
+            tooltipText: "Open player"
+            onClicked: root.openPlayer()
+          }
+
+          Button {
+            text: root.activePlayer ? (Math.round(root.activePlayer.rate * 100) / 100) + "x" : ""
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingX
+            verticalPadding: Style.spacing.controlPaddingY
+            visible: root.rateAdjustable
+            selected: visible && Math.abs(root.activePlayer.rate - 1) > 0.001
+            tooltipText: "Playback speed"
+            onClicked: root.cycleRate()
+          }
+        }
+
+        Row {
+          id: volume
+          width: parent.width
+          spacing: Style.space(8)
+          visible: root.activePlayer !== null && root.activePlayer.volumeSupported
+
+          property bool dragging: false
+          property real dragValue: 0
+          readonly property real level: dragging ? dragValue
+            : (root.activePlayer && root.activePlayer.volumeSupported ? Math.max(0, Math.min(1, root.activePlayer.volume)) : 0)
+
+          Text {
+            id: volumeIcon
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            text: volume.level <= 0 ? "󰝟" : (volume.level < 0.5 ? "󰖀" : "󰕾")
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.icon
+          }
+
+          Item {
+            id: volumeBar
+            width: parent.width - volumeIcon.width - volumePercent.width - parent.spacing * 2
+            height: Style.space(16)
+            anchors.verticalCenter: parent.verticalCenter
+
+            function setFrom(x) {
+              volume.dragValue = Math.max(0, Math.min(1, x / width))
+              root.queueVolume(volume.dragValue)
+            }
+
+            Rectangle {
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width
+              height: Style.space(4)
+              radius: height / 2
+              color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.2)
+
+              Rectangle {
+                width: parent.width * volume.level
+                height: parent.height
+                radius: parent.radius
+                color: Color.accent
+              }
+            }
+
+            Rectangle {
+              readonly property real size: Style.space(12)
+              width: size
+              height: size
+              radius: size / 2
+              anchors.verticalCenter: parent.verticalCenter
+              x: Math.max(0, Math.min(volumeBar.width - size, volumeBar.width * volume.level - size / 2))
+              color: Color.accent
+              border.width: Style.space(2)
+              border.color: root.bar.foreground
+            }
+
+            MouseArea {
+              anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
-              onClicked: if (root.mediaService) root.mediaService.selectPlayer(root.mediaService.playerKey(sourceRow.player))
+              onPressed: function(mouse) {
+                volume.dragging = true
+                volumeBar.setFrom(mouse.x)
+              }
+              onPositionChanged: function(mouse) {
+                if (volume.dragging) volumeBar.setFrom(mouse.x)
+              }
+              onReleased: {
+              root.flushVolume()
+              volume.dragging = false
+            }
+              onCanceled: volume.dragging = false
+            }
+          }
+
+          Text {
+            id: volumePercent
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(34)
+            horizontalAlignment: Text.AlignRight
+            text: Math.round(volume.level * 100) + "%"
+            color: Qt.darker(root.bar.foreground, 1.3)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+        }
+
+        PanelSeparator {
+          visible: root.sourcePlayers.length > 1
+          foreground: root.bar.foreground
+        }
+
+        Column {
+          id: sourceList
+          visible: root.sourcePlayers.length > 1
+          width: parent.width
+          spacing: Style.space(4)
+
+          Repeater {
+            model: root.sourcePlayers
+
+            BorderSurface {
+              id: sourceRow
+              required property var modelData
+
+              readonly property var player: modelData
+              readonly property bool selected: root.activePlayer && player
+                && root.mediaService.playerKey(root.activePlayer) === root.mediaService.playerKey(player)
+              readonly property string sourceTitle: player ? (player.trackTitle || player.identity || player.desktopEntry || "Media source") : "Media source"
+              readonly property string sourceDetail: player && player.trackArtist ? player.trackArtist : (player && player.identity ? player.identity : "")
+
+              width: sourceList.width
+              height: sourceInner.implicitHeight + Style.space(10)
+              radius: Style.spacing.labelGap
+              color: selected ? Style.selectedFillFor(root.bar.foreground, Color.accent) : "transparent"
+              borderSpec: selected ? Border.controlSpec("normal", root.bar.foreground, Color.accent) : Border.none()
+
+              Row {
+                id: sourceInner
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: sourceRow.borderLeft + Style.space(8)
+                anchors.rightMargin: sourceRow.borderRight + Style.space(8)
+                spacing: Style.space(8)
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: sourceRow.player && sourceRow.player.isPlaying ? "󰏤" : "󰐊"
+                  color: root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.body
+                  width: Style.space(18)
+                  horizontalAlignment: Text.AlignHCenter
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Column {
+                  width: parent.width - Style.space(26)
+                  spacing: Style.space(1)
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: sourceRow.sourceTitle
+                    color: root.bar.foreground
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: sourceRow.selected
+                    elide: Text.ElideRight
+                    width: parent.width
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: sourceRow.sourceDetail
+                    color: Qt.darker(root.bar.foreground, 1.5)
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                    width: parent.width
+                    visible: text !== ""
+                  }
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root.mediaService) root.mediaService.selectPlayer(root.mediaService.playerKey(sourceRow.player))
+              }
             }
           }
         }

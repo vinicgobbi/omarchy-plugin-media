@@ -44,6 +44,25 @@ right click opens the popup.
 - Click anywhere on the bar to jump there, or drag; the seek is applied
   when you release the mouse.
 
+### Popup
+
+Buttons: shuffle, previous, play/pause, next, repeat, open player and
+playback speed (each only when the player supports it), plus a volume
+slider. Scrolling over the progress bar seeks by 5 s.
+
+Keyboard, while the popup is open:
+
+| Key                    | Effect                                  |
+| ---------------------- | --------------------------------------- |
+| Tab / Shift+Tab        | Switch between available players        |
+| Space / Enter          | Play / pause                            |
+| Left / Right (`h`/`l`) | Seek -5 s / +5 s                        |
+| Up / Down (`k`/`j`)    | Volume +5% / -5%                        |
+| `n` / `p`              | Next / previous track                   |
+| `s` / `r` / `f`        | Shuffle / repeat / playback speed       |
+| `o`                    | Open the player window                  |
+| `q` / Esc              | Close the popup                         |
+
 ## Uninstall
 
 ```bash
