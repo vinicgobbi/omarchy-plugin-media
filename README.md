@@ -5,6 +5,8 @@ from the built-in `omarchy.media`. It shows what's playing over MPRIS and
 opens a popup with playback controls and a live progress bar you can seek
 with. What the widget shows in the bar is configurable.
 
+![Media Manager popup](preview.png)
+
 ## Features
 
 - Bar widget with the play/pause state and the track text
