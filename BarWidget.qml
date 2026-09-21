@@ -231,7 +231,7 @@ BarWidget {
         }
 
         Item {
-          id: bar
+          id: seekBar
           width: parent.width
           height: Style.space(16)
 
@@ -261,10 +261,10 @@ BarWidget {
             cursorShape: progress.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
             onPressed: function(mouse) {
               progress.dragging = true
-              bar.seekTo(mouse.x)
+              seekBar.seekTo(mouse.x)
             }
             onPositionChanged: function(mouse) {
-              if (progress.dragging) bar.seekTo(mouse.x)
+              if (progress.dragging) seekBar.seekTo(mouse.x)
             }
             onReleased: {
               if (progress.dragging && root.activePlayer) root.activePlayer.position = progress.dragPosition
