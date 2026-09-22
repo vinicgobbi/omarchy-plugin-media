@@ -20,27 +20,6 @@ with. What the widget shows in the bar is configurable.
 
 ![Media Manager popup](preview.png)
 
-## Install
-
-```bash
-omarchy plugin add https://github.com/vinicgobbi/omarchy-plugin-media.git --enable
-```
-
-Disable any other media widget (`omarchy.media`, `bibek.media`) so only
-one media service is active.
-
-## Update
-
-```bash
-omarchy plugin update vinicgobbi.media
-```
-
-## Uninstall
-
-```bash
-omarchy plugin remove vinicgobbi.media
-```
-
 ## Usage
 
 | Action           | Effect               |
@@ -90,6 +69,27 @@ Keyboard, while the popup is open:
 | `o`                    | Open the player window                  |
 | `c`                    | Open / close the advanced options       |
 | `q` / Esc              | Close the popup (or leave the options)  |
+
+## Install
+
+```bash
+omarchy plugin add https://github.com/vinicgobbi/omarchy-plugin-media.git --enable
+```
+
+Disable any other media widget (`omarchy.media`, `bibek.media`) so only
+one media service is active.
+
+## Update
+
+```bash
+omarchy plugin update vinicgobbi.media
+```
+
+## Uninstall
+
+```bash
+omarchy plugin remove vinicgobbi.media
+```
 
 ## Options
 
