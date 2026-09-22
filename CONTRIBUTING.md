@@ -1,4 +1,4 @@
-# Development
+# Contributing
 
 ## Local setup
 
@@ -108,6 +108,12 @@ omarchy plugin validate .
 - **Use the shell's controls** (`ToggleSwitch`, `ButtonGroup`,
   `NumberField`, `PanelSectionHeader`, ...) in the options view instead of
   drawing your own, so it matches the other Omarchy panels.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` (and on pull
+requests) and validates `manifest.json` and every `.qml` file with
+`qmllint`, so a syntax error can't land on `main`.
 
 ## Commits and releases
 

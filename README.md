@@ -5,9 +5,7 @@ from the built-in `omarchy.media`. It shows what's playing over MPRIS and
 opens a popup with playback controls and a live progress bar you can seek
 with. What the widget shows in the bar is configurable.
 
-![Media Manager popup](preview.png)
-
-## Features
+## What it does
 
 - Bar widget with the play/pause state and the track text
 - Popup with album art, track info and previous / play-pause / next
@@ -18,6 +16,10 @@ with. What the widget shows in the bar is configurable.
 - **Advanced options** to choose what the bar shows and how it looks
 - `media` IPC target for scripts and hotkeys
 
+## Preview
+
+![Media Manager popup](preview.png)
+
 ## Install
 
 ```bash
@@ -26,6 +28,18 @@ omarchy plugin add https://github.com/vinicgobbi/omarchy-plugin-media.git --enab
 
 Disable any other media widget (`omarchy.media`, `bibek.media`) so only
 one media service is active.
+
+## Update
+
+```bash
+omarchy plugin update vinicgobbi.media
+```
+
+## Uninstall
+
+```bash
+omarchy plugin remove vinicgobbi.media
+```
 
 ## Usage
 
@@ -109,20 +123,14 @@ that differ from the defaults are written there:
 The same options are declared in the manifest's `schema`, so they also show
 up wherever Omarchy renders plugin settings.
 
-## Uninstall
+## Notes
 
-```bash
-omarchy plugin remove vinicgobbi.media
-```
+Based on the built-in `omarchy.media` plugin by the Omarchy team.
 
 ## Contributing
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for local setup, the plugin's file
-structure, and the commit/release process.
-
-## Credits
-
-Based on the built-in `omarchy.media` plugin by the Omarchy team.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the plugin's
+file structure, and the commit/release process.
 
 ## License
 
