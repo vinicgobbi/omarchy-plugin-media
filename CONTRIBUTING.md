@@ -2,22 +2,34 @@
 
 ## Local setup
 
-Symlink this repo into your Omarchy plugins directory so edits hot-reload
-without reinstalling:
+`omarchy plugin validate .` rejects a plugin folder that contains a
+symlink, so a plain `ln -s` of this repo into
+`~/.config/omarchy/plugins/` won't load. Clone it there instead
+(a real, separate working copy — like `omarchy plugin add` would
+leave):
 
 ```bash
-ln -s "$(pwd)" ~/.config/omarchy/plugins/vinicgobbi.media
+git clone "$(pwd)" ~/.config/omarchy/plugins/vinicgobbi.media
 omarchy plugin enable vinicgobbi.media
+```
+
+To pick up local edits without re-cloning, add this repo as a remote
+in the installed copy and pull:
+
+```bash
+git -C ~/.config/omarchy/plugins/vinicgobbi.media remote add dev "$(pwd)"
+git -C ~/.config/omarchy/plugins/vinicgobbi.media pull dev main
 ```
 
 This plugin is a clone of the built-in `omarchy.media`, so disable the
 media widget you were using before (`omarchy.media` or `bibek.media`) to
 avoid two media services running at once.
 
-Saving `BarWidget.qml` (the plugin's entry point) hot-reloads on its own.
-`Service.qml` is `keepLoaded`, so a change to it only takes effect after a
-full shell restart; the same goes for a component the shell has already
-cached, like `AdvancedSettings.qml`. If a change doesn't show up:
+`BarWidget.qml` (the plugin's entry point) hot-reloads on its own once
+the installed copy is updated. `Service.qml` is `keepLoaded`, so a
+change to it only takes effect after a full shell restart; the same
+goes for a component the shell has already cached, like
+`AdvancedSettings.qml`. If a change doesn't show up:
 
 ```bash
 omarchy restart shell
