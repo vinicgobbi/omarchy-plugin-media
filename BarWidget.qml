@@ -34,11 +34,14 @@ BarWidget {
     if (bar && bar.shell)
       bar.shell.updateEntryInline(moduleName, MediaModel.entrySettings(prefsNow, settings))
   }
-  // Metadata comes from whatever is playing, so it is capped in length and the
-  // cover URL is restricted (see MediaModel.clip / safeArtUrl).
+  // Metadata comes from whatever is playing, so it is capped in length. The
+  // cover art itself is never bound to the raw remote URL: mediaService
+  // downloads/validates it (host, size, and decoded dimensions) into a
+  // local cache file first (see Service.qml's refreshArt) and this only
+  // ever points Image at that already-validated local path.
   readonly property string album: activePlayer && activePlayer.trackAlbum ? MediaModel.clip(activePlayer.trackAlbum) : ""
   readonly property string playerName: activePlayer ? MediaModel.clip(activePlayer.identity || activePlayer.desktopEntry || "") : ""
-  readonly property string artUrl: activePlayer ? MediaModel.safeArtUrl(activePlayer.trackArtUrl) : ""
+  readonly property string artUrl: mediaService ? mediaService.safeArtPath : ""
   readonly property string barText: MediaModel.barLabel(
     { title: title, artist: artist, album: album, player: playerName }, prefs)
 

@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import qs.Commons
 import "MediaModel.js" as MediaModel
 
 Item {
@@ -36,6 +37,116 @@ Item {
   readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
   readonly property string artUrl: activePlayer && activePlayer.trackArtUrl ? activePlayer.trackArtUrl : ""
   readonly property string identity: activePlayer ? (activePlayer.identity || activePlayer.desktopEntry || "") : ""
+
+  // --- Cover art: fetched/copied, byte-capped, and dimension-validated
+  // before it ever reaches a QML Image. trackArtUrl is attacker-controlled
+  // (any MPRIS player, including a hostile web page via a browser's media
+  // session bridge) and Image has no built-in cap on response size or
+  // decoded pixel count — a small, highly-compressed file claiming an
+  // enormous width/height could make the shell allocate far more memory
+  // than the ~22-64px it actually renders at, or crash outright. This
+  // downloads/copies to a temp file with hard size and time caps, checks
+  // its real dimensions with ImageMagick (itself resource-limited) without
+  // ever handing raw remote bytes to Image, and only then publishes the
+  // validated local path. Redirects are not followed — safeArtUrl only
+  // vets the initial host, so following one could reach an internal
+  // address it already rejected.
+  readonly property int artMaxBytes: 8 * 1024 * 1024
+  readonly property int artMaxDimension: 4096
+  property int _artGeneration: 0
+  property string _artCurrentFile: ""
+  property string safeArtPath: ""
+
+  readonly property string _artCacheDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/omarchy/vinicgobbi.media"
+
+  readonly property string _artFetchScript: [
+    "dir=$(dirname -- \"$2\")",
+    "mkdir -p -- \"$dir\" || exit 1",
+    "tmp=\"$2.tmp\"",
+    "rm -f -- \"$tmp\"",
+    "if [ \"$3\" = \"1\" ]; then",
+    "  src=${1#file://}",
+    "  size=$(stat -c%s -- \"$src\" 2>/dev/null) || exit 1",
+    "  [ \"$size\" -le \"$4\" ] || exit 1",
+    "  cp -- \"$src\" \"$tmp\" || exit 1",
+    "else",
+    "  curl -fsS --connect-timeout 3 --max-time 8 --max-filesize \"$4\" -- \"$1\" 2>/dev/null | head -c \"$4\" > \"$tmp\"",
+    "  [ -s \"$tmp\" ] || { rm -f -- \"$tmp\"; exit 1; }",
+    "fi",
+    "dims=$(timeout 5 identify -limit area 64MB -limit memory 64MB -limit map 64MB -format '%w %h' -- \"${tmp}[0]\" 2>/dev/null) || { rm -f -- \"$tmp\"; exit 1; }",
+    "w=${dims%% *}",
+    "h=${dims##* }",
+    "case \"$w\" in ''|*[!0-9]*) rm -f -- \"$tmp\"; exit 1;; esac",
+    "case \"$h\" in ''|*[!0-9]*) rm -f -- \"$tmp\"; exit 1;; esac",
+    "if [ \"$w\" -gt \"$5\" ] || [ \"$h\" -gt \"$5\" ]; then rm -f -- \"$tmp\"; exit 1; fi",
+    "mv -f -- \"$tmp\" \"$2\""
+  ].join("\n")
+
+  function _clearArt() {
+    root.safeArtPath = ""
+    var stale = root._artCurrentFile
+    root._artCurrentFile = ""
+    if (stale) artCleanupProcess.remove(stale)
+  }
+
+  function refreshArt() {
+    var safe = MediaModel.safeArtUrl(root.artUrl)
+    if (safe === "") { root._clearArt(); return }
+
+    root._artGeneration += 1
+    var generation = root._artGeneration
+    var isLocal = /^file:\/\/\//i.test(safe)
+    var target = root._artCacheDir + "/cover-" + generation + "-" + Math.floor(Math.random() * 1e6) + ".img"
+
+    artFetchProcess.generation = generation
+    artFetchProcess.targetPath = target
+    artFetchProcess.command = ["bash", "-c", root._artFetchScript, "_",
+      safe, target, isLocal ? "1" : "0", String(root.artMaxBytes), String(root.artMaxDimension)]
+    artFetchProcess.running = true
+  }
+
+  onArtUrlChanged: root.refreshArt()
+  Component.onCompleted: {
+    // Sweep anything left behind by a crashed previous session before this
+    // one starts writing to the same cache directory.
+    artStartupCleanupProcess.command = ["sh", "-c", "rm -rf -- \"$1\"; mkdir -p -- \"$1\"", "_", root._artCacheDir]
+    artStartupCleanupProcess.running = true
+    root.refreshArt()
+  }
+
+  Process { id: artStartupCleanupProcess }
+
+  Process {
+    id: artCleanupProcess
+    function remove(path) {
+      if (!path) return
+      command = ["rm", "-f", "--", path]
+      running = true
+    }
+  }
+
+  Process {
+    id: artFetchProcess
+    property int generation: 0
+    property string targetPath: ""
+    onExited: function(exitCode) {
+      // A newer track may have started a fresh fetch while this one was in
+      // flight; only publish (or clean up in place of) a result that's
+      // still the one currently requested.
+      if (generation !== root._artGeneration) {
+        if (exitCode === 0) artCleanupProcess.remove(targetPath)
+        return
+      }
+      if (exitCode === 0) {
+        var previous = root._artCurrentFile
+        root._artCurrentFile = targetPath
+        root.safeArtPath = Util.fileUrl(targetPath)
+        if (previous && previous !== targetPath) artCleanupProcess.remove(previous)
+      } else {
+        root.safeArtPath = ""
+      }
+    }
+  }
 
   function isProxyPlayer(player) {
     return MediaModel.isProxyPlayer(player)
