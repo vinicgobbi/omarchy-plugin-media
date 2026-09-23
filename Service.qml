@@ -106,7 +106,8 @@ Item {
   }
 
   onArtUrlChanged: root.refreshArt()
-  Component.onCompleted: {
+
+  function initArtCache() {
     // Sweep anything left behind by a crashed previous session before this
     // one starts writing to the same cache directory.
     artStartupCleanupProcess.command = ["sh", "-c", "rm -rf -- \"$1\"; mkdir -p -- \"$1\"", "_", root._artCacheDir]
@@ -565,7 +566,10 @@ Item {
   // syncPlayingOrder only depends on the set of players and each player's
   // isPlaying state: onPlayersChanged covers players appearing/disappearing,
   // and the Instantiator wires isPlayingChanged for each live player.
-  Component.onCompleted: root.syncPlayingOrder()
+  Component.onCompleted: {
+    root.syncPlayingOrder()
+    root.initArtCache()
+  }
   onPlayersChanged: root.syncPlayingOrder()
 
   Instantiator {
