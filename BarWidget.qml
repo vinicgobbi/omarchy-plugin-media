@@ -71,7 +71,7 @@ BarWidget {
   component BarButton: Item {
     id: btn
     property string glyphText: ""
-    property color fg: "white"
+    property color fg: Color.foreground
     property string family: ""
     property real pixelSize: 12
     property bool active: true
@@ -582,7 +582,7 @@ BarWidget {
               width: parent.width
               height: Style.space(4)
               radius: height / 2
-              color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.2)
+              color: Util.alpha(root.bar.foreground, 0.2)
 
               Rectangle {
                 width: progress.length > 0 ? parent.width * progress.shown / progress.length : 0
@@ -773,7 +773,7 @@ BarWidget {
               width: parent.width
               height: Style.space(4)
               radius: height / 2
-              color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.2)
+              color: Util.alpha(root.bar.foreground, 0.2)
 
               Rectangle {
                 width: parent.width * volume.level
@@ -840,7 +840,7 @@ BarWidget {
           Repeater {
             model: root.sourcePlayers
 
-            BorderSurface {
+            CursorSurface {
               id: sourceRow
               required property var modelData
 
@@ -853,8 +853,8 @@ BarWidget {
               width: sourceList.width
               height: sourceInner.implicitHeight + Style.space(10)
               radius: Style.spacing.labelGap
-              color: selected ? Style.selectedFillFor(root.bar.foreground, Color.accent) : "transparent"
-              borderSpec: selected ? Border.controlSpec("normal", root.bar.foreground, Color.accent) : Border.none()
+              foreground: root.bar.foreground
+              current: selected
 
               Row {
                 id: sourceInner
@@ -909,6 +909,8 @@ BarWidget {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onEntered: sourceRow.hasCursor = true
+                onExited: sourceRow.hasCursor = false
                 onClicked: if (root.mediaService) root.mediaService.selectPlayer(root.mediaService.playerKey(sourceRow.player))
               }
             }

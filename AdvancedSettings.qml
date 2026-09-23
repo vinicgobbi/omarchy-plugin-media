@@ -177,9 +177,9 @@ Column {
       width: parent.width
       height: Style.space(32)
       radius: Style.spacing.labelGap
-      color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08)
+      color: Util.alpha(root.foreground, 0.08)
       border.width: Style.space(1)
-      border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.25)
+      border.color: Util.alpha(root.foreground, 0.25)
       clip: true
 
       readonly property string previewString: MediaModel.barLabel({
@@ -213,7 +213,7 @@ Column {
           height: width
           radius: Style.space(3)
           visible: root.prefs.showCover
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.25)
+          color: Util.alpha(root.foreground, 0.25)
 
           Text {
             textFormat: Text.PlainText
