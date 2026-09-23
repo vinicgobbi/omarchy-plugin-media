@@ -82,11 +82,32 @@ Item {
     "mv -f -- \"$tmp\" \"$2\""
   ].join("\n")
 
+  // At most one fetch runs at a time (reassigning `command` on an
+  // already-running Process is exactly what every other Process in this
+  // codebase guards against — see e.g. VpnService.qml's `if (x.running)
+  // return`). A track change while a fetch is in flight replaces this
+  // instead of starting a second one; only the latest request matters.
+  property var _artPending: null
+
   function _clearArt() {
+    // Bump the generation too, not just the visible state: otherwise a
+    // fetch already in flight for the track that just went away would
+    // still match root._artGeneration when it lands and resurrect art for
+    // a track that's no longer playing.
+    root._artGeneration += 1
+    root._artPending = null
     root.safeArtPath = ""
     var stale = root._artCurrentFile
     root._artCurrentFile = ""
     if (stale) artCleanupProcess.remove(stale)
+  }
+
+  function _startArtFetch(request) {
+    artFetchProcess.generation = request.generation
+    artFetchProcess.targetPath = request.target
+    artFetchProcess.command = ["bash", "-c", root._artFetchScript, "_",
+      request.safe, request.target, request.isLocal ? "1" : "0", String(root.artMaxBytes), String(root.artMaxDimension)]
+    artFetchProcess.running = true
   }
 
   function refreshArt() {
@@ -94,15 +115,20 @@ Item {
     if (safe === "") { root._clearArt(); return }
 
     root._artGeneration += 1
-    var generation = root._artGeneration
     var isLocal = /^file:\/\/\//i.test(safe)
-    var target = root._artCacheDir + "/cover-" + generation + "-" + Math.floor(Math.random() * 1e6) + ".img"
+    var generation = root._artGeneration
+    var request = {
+      safe: safe,
+      generation: generation,
+      isLocal: isLocal,
+      target: root._artCacheDir + "/cover-" + generation + "-" + Math.floor(Math.random() * 1e6) + ".img"
+    }
 
-    artFetchProcess.generation = generation
-    artFetchProcess.targetPath = target
-    artFetchProcess.command = ["bash", "-c", root._artFetchScript, "_",
-      safe, target, isLocal ? "1" : "0", String(root.artMaxBytes), String(root.artMaxDimension)]
-    artFetchProcess.running = true
+    if (artFetchProcess.running) {
+      root._artPending = request
+      return
+    }
+    root._startArtFetch(request)
   }
 
   onArtUrlChanged: root.refreshArt()
@@ -119,9 +145,17 @@ Item {
 
   Process {
     id: artCleanupProcess
+    property var _queue: []
     function remove(path) {
       if (!path) return
+      if (running) { _queue.push(path); return }
       command = ["rm", "-f", "--", path]
+      running = true
+    }
+    onExited: {
+      if (_queue.length === 0) return
+      var next = _queue.shift()
+      command = ["rm", "-f", "--", next]
       running = true
     }
   }
@@ -134,18 +168,24 @@ Item {
       // A newer track may have started a fresh fetch while this one was in
       // flight; only publish (or clean up in place of) a result that's
       // still the one currently requested.
-      if (generation !== root._artGeneration) {
-        if (exitCode === 0) artCleanupProcess.remove(targetPath)
-        return
+      if (generation === root._artGeneration) {
+        if (exitCode === 0) {
+          var previous = root._artCurrentFile
+          root._artCurrentFile = targetPath
+          root.safeArtPath = Util.fileUrl(targetPath)
+          if (previous && previous !== targetPath) artCleanupProcess.remove(previous)
+        } else {
+          root.safeArtPath = ""
+        }
+      } else if (exitCode === 0) {
+        artCleanupProcess.remove(targetPath)
       }
-      if (exitCode === 0) {
-        var previous = root._artCurrentFile
-        root._artCurrentFile = targetPath
-        root.safeArtPath = Util.fileUrl(targetPath)
-        if (previous && previous !== targetPath) artCleanupProcess.remove(previous)
-      } else {
-        root.safeArtPath = ""
-      }
+
+      // At most one fetch runs at a time: start whatever the latest
+      // track-change queued while this one was in flight.
+      var pending = root._artPending
+      root._artPending = null
+      if (pending) root._startArtFetch(pending)
     }
   }
 
