@@ -1,3 +1,9 @@
+## v0.1.2 (2026-10-03)
+
+### Fix
+
+- **security**: capa do álbum só aceita PNG/JPEG/GIF/WebP pela assinatura dos bytes, com o decodificador do ImageMagick explícito (um PostScript/PDF/SVG disfarçado chegava ao Ghostscript), arquivo local só se for arquivo comum (file:///dev/zero enchia o disco, FIFO travava a busca), curl só https e IPs em grafias alternativas (127.1, 2130706433, 0x7f.1) tratados como internos
+
 ## v0.1.1 (2026-10-03)
 
 ### Fix
