@@ -135,17 +135,25 @@ function clip(value, max) {
 
 // Host names that point at this machine or the local network.
 function isPrivateHost(host) {
-  var h = String(host || "").toLowerCase()
+  var h = String(host || "").toLowerCase().replace(/\.$/, "")
   if (h === "" || h === "localhost" || h.charAt(0) === "[") return true
   if (/\.(local|localhost|internal|lan|home|corp|intranet)$/.test(h)) return true
-  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h)
-  if (!m) return false
-  var a = parseInt(m[1], 10), b = parseInt(m[2], 10)
-  return a === 0 || a === 10 || a === 127
-    || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && b === 168)
-    || (a === 100 && b >= 64 && b <= 127)
+  // A host made only of numbers is an IP address. The resolver also takes
+  // short, octal and hex spellings ("127.1", "2130706433", "0177.0.0.1",
+  // "0x7f.1") that a dotted-quad check would wave through, so anything but
+  // the plain four-decimals form counts as internal.
+  if (h.split(".").every(function(part) { return /^(\d+|0x[0-9a-f]*)$/.test(part) })) {
+    var m = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.exec(h)
+    if (!m) return true
+    var a = parseInt(m[1], 10), b = parseInt(m[2], 10)
+    return a === 0 || a === 10 || a === 127 || a >= 224
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 198 && (b === 18 || b === 19))
+  }
+  return false
 }
 
 // Cover art URL that is safe to hand to an Image: https to a public host, or

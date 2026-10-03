@@ -66,14 +66,29 @@ Item {
     "rm -f -- \"$tmp\"",
     "if [ \"$3\" = \"1\" ]; then",
     "  src=${1#file://}",
-    "  size=$(stat -c%s -- \"$src\" 2>/dev/null) || exit 1",
+    // Regular files only: /dev/zero reports size 0 and never ends (it would
+    // fill the disk), a FIFO would hang the fetch. head -c caps it anyway.
+    "  [ -f \"$src\" ] || exit 1",
+    "  size=$(stat -L -c%s -- \"$src\" 2>/dev/null) || exit 1",
     "  [ \"$size\" -le \"$4\" ] || exit 1",
-    "  cp -- \"$src\" \"$tmp\" || exit 1",
+    "  head -c \"$4\" -- \"$src\" > \"$tmp\" || exit 1",
     "else",
-    "  curl -fsS --connect-timeout 3 --max-time 8 --max-filesize \"$4\" -- \"$1\" 2>/dev/null | head -c \"$4\" > \"$tmp\"",
+    "  curl -fsS --proto =https --connect-timeout 3 --max-time 8 --max-filesize \"$4\" -- \"$1\" 2>/dev/null | head -c \"$4\" > \"$tmp\"",
     "  [ -s \"$tmp\" ] || { rm -f -- \"$tmp\"; exit 1; }",
     "fi",
-    "dims=$(timeout 5 identify -limit area 64MB -limit memory 64MB -limit map 64MB -format '%w %h' -- \"${tmp}[0]\" 2>/dev/null) || { rm -f -- \"$tmp\"; exit 1; }",
+    // Only real PNG/JPEG/GIF/WebP, told apart by their first bytes, and
+    // ImageMagick is told which decoder to use: left to guess, it would hand
+    // a PostScript/PDF/SVG dressed up as cover art to Ghostscript or an SVG
+    // renderer, far more attack surface than reading four image headers.
+    "sig=$(head -c 12 -- \"$tmp\" | od -An -tx1 | tr -d ' \\n')",
+    "case \"$sig\" in",
+    "  89504e470d0a1a0a*) fmt=png;;",
+    "  ffd8ff*) fmt=jpeg;;",
+    "  474946383761*|474946383961*) fmt=gif;;",
+    "  52494646????????57454250) fmt=webp;;",
+    "  *) rm -f -- \"$tmp\"; exit 1;;",
+    "esac",
+    "dims=$(timeout 5 identify -limit area 64MB -limit memory 64MB -limit map 64MB -format '%w %h' -- \"${fmt}:${tmp}[0]\" 2>/dev/null) || { rm -f -- \"$tmp\"; exit 1; }",
     "w=${dims%% *}",
     "h=${dims##* }",
     "case \"$w\" in ''|*[!0-9]*) rm -f -- \"$tmp\"; exit 1;; esac",
