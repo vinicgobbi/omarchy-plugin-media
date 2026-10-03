@@ -1,3 +1,16 @@
+## v0.1.1 (2026-10-03)
+
+### Fix
+
+- evita reatribuir command/running num Process já em execução (troca rápida de faixa) e corrige corrida onde arte de uma faixa antiga podia ressuscitar
+- mescla os dois Component.onCompleted duplicados (quebrava o carregamento do service)
+- valida a capa do álbum (bytes, timeout, dimensões decodificadas) antes do QML Image, contra bomba de descompressão via MPRIS não confiável
+- disable qmllint's alias category too
+
+### Refactor
+
+- usa Util.alpha() e CursorSurface (componentes do Omarchy) em vez de reimplementar hover/seleção e alpha na mão
+
 ## v0.1.0 (2026-09-21)
 
 ### Feat
