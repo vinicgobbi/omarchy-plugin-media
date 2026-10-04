@@ -48,6 +48,13 @@ BarWidget {
   // Live streams have no end, so they get a LIVE badge instead of a time.
   readonly property bool isLive: MediaModel.isLiveStream(activePlayer)
 
+  // The bar only shows a tooltip while its target reports tooltipHovered;
+  // without it the tooltip was never shown. Not while the popup is open,
+  // which already shows the same info.
+  readonly property bool tooltipHovered: widgetArea.containsMouse && !popupOpen
+  readonly property string tooltipText: MediaModel.tooltipLabel(
+    { title: title, artist: artist, album: album, player: playerName, live: isLive })
+
   // Elapsed / total time for the bar. Empty when the player doesn't report it.
   readonly property string timeText: {
     var p = activePlayer
@@ -384,6 +391,7 @@ BarWidget {
   }
 
   MouseArea {
+    id: widgetArea
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.activePlayer ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -404,7 +412,7 @@ BarWidget {
       if (wheel.angleDelta.y > 0) root.transport("previous", 350)
       else if (wheel.angleDelta.y < 0) root.transport("next", 350)
     }
-    onEntered: if (root.bar) root.bar.showTooltip(root, root.hasMedia ? (root.title + (root.artist ? " — " + root.artist : "")) : "")
+    onEntered: if (root.bar) root.bar.showTooltip(root, root.hasMedia ? root.tooltipText : "")
     onExited: if (root.bar) root.bar.hideTooltip(root)
   }
 

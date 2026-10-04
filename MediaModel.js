@@ -271,6 +271,25 @@ function barLabel(info, prefs) {
   return !prefs.dynamicWidth && prefs.textMode === "ellipsis" ? ellipsize(text, prefs.maxChars) : text
 }
 
+// Hover tooltip for the bar: the full track info, since the bar text may be
+// cut or scrolling. One fact per line, each line capped (the tooltip has no
+// maximum width). `info` is { title, artist, album, player, live }.
+var TOOLTIP_LINE_CHARS = 80
+
+function tooltipLabel(info) {
+  var lines = []
+  var detail = []
+  if (info.artist) detail.push(info.artist)
+  if (info.album) detail.push(info.album)
+  var source = info.player ? [info.player] : []
+  if (info.live) source.push("LIVE")
+  if (info.title) lines.push(info.title)
+  if (detail.length) lines.push(detail.join("  \u00b7  "))
+  if (source.length) lines.push(source.join("  \u00b7  "))
+  for (var i = 0; i < lines.length; i++) lines[i] = ellipsize(lines[i], TOOLTIP_LINE_CHARS)
+  return lines.join("\n")
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     isProxyPlayer: isProxyPlayer,
@@ -298,6 +317,7 @@ if (typeof module !== "undefined") {
     isPrivateHost: isPrivateHost,
     entrySettings: entrySettings,
     ellipsize: ellipsize,
-    barLabel: barLabel
+    barLabel: barLabel,
+    tooltipLabel: tooltipLabel
   }
 }
