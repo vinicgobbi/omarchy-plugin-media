@@ -1,3 +1,13 @@
+## v0.2.0 (2026-10-04)
+
+### Feat
+
+- badge LIVE em transmissões ao vivo no lugar do tempo na barra e da barra de progresso no popup (o Chromium manda duração INT64_MAX e a barra mostrava 0:14 / 2562047788:00:54; Firefox e mpv omitem a duração)
+
+### Fix
+
+- tooltip da barra nunca aparecia (o shell exige tooltipHovered no alvo) e agora mostra título, artista · álbum e player (· LIVE), uma linha cada, limitadas a 80 caracteres
+
 ## v0.1.2 (2026-10-03)
 
 ### Fix
