@@ -12,6 +12,19 @@ function hasTrackMetadata(player) {
   return !!(player && (player.trackTitle || player.trackArtist || player.trackAlbum || player.trackArtUrl))
 }
 
+// A live stream has no end. Chromium reports that as mpris:length =
+// INT64_MAX µs (~9.2e12 s); Firefox and mpv just leave the length out. Both
+// count as live only while the player still reports a position, so a player
+// that reports no timing at all is not mistaken for one.
+var LIVE_LENGTH_SECONDS = 1e9 // ~31 years: no real track is that long
+
+function isLiveStream(player) {
+  if (!player || !player.positionSupported) return false
+  if (!player.lengthSupported) return true
+  var length = Number(player.length)
+  return !(length > 0) || !isFinite(length) || length >= LIVE_LENGTH_SECONDS
+}
+
 function playerCanControl(player) {
   return !!(player && (player.canTogglePlaying || player.canPlay || player.canPause || player.canGoNext || player.canGoPrevious))
 }
@@ -263,6 +276,7 @@ if (typeof module !== "undefined") {
     isProxyPlayer: isProxyPlayer,
     hasMetadata: hasMetadata,
     hasTrackMetadata: hasTrackMetadata,
+    isLiveStream: isLiveStream,
     playerCanControl: playerCanControl,
     canHandleAction: canHandleAction,
     canCycleSource: canCycleSource,

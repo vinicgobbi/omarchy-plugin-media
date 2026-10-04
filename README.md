@@ -44,8 +44,12 @@ right click opens the popup.
 
 ### Progress bar
 
-- Shown only when the player reports both position and length. Live
-  streams and players without them get no bar.
+- Shown only when the player reports both position and length. Players
+  without them get no bar.
+- Live streams get a **LIVE** badge instead of the bar (and instead of the
+  time in the bar, with `showTime` on). A stream counts as live when the
+  player reports a position but no end: Chromium-based browsers send an
+  "infinite" length, Firefox and mpv leave the length out.
 - If the player doesn't support seeking, the bar is display-only.
 - Click anywhere on the bar to jump there, or drag; the seek is applied
   when you release the mouse. Scrolling over it seeks by 5 s.
@@ -111,7 +115,7 @@ that differ from the defaults are written there:
 | `showArtist`     | `true`   | Track artist                                                        |
 | `showAlbum`      | `false`  | Album name                                                          |
 | `showPlayer`     | `false`  | Name of the app playing (Spotify, Chrome...)                        |
-| `showTime`       | `false`  | Elapsed / total time next to the text                               |
+| `showTime`       | `false`  | Elapsed / total time next to the text, or a LIVE badge              |
 | `artistFirst`    | `false`  | "artist · title" instead of "title · artist"                        |
 | `separator`      | `"·"`    | Between the pieces of text: `·`, `-`, `\|` or `/`                   |
 | `hideWhenPaused` | `false`  | Hide the widget while nothing is playing                            |

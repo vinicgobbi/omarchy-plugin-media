@@ -45,10 +45,13 @@ BarWidget {
   readonly property string barText: MediaModel.barLabel(
     { title: title, artist: artist, album: album, player: playerName }, prefs)
 
+  // Live streams have no end, so they get a LIVE badge instead of a time.
+  readonly property bool isLive: MediaModel.isLiveStream(activePlayer)
+
   // Elapsed / total time for the bar. Empty when the player doesn't report it.
   readonly property string timeText: {
     var p = activePlayer
-    if (!p || !p.positionSupported) return ""
+    if (!p || !p.positionSupported || isLive) return ""
     var elapsed = formatTime(p.position)
     return p.lengthSupported && p.length > 0 ? elapsed + " / " + formatTime(p.length) : elapsed
   }
@@ -68,6 +71,27 @@ BarWidget {
   readonly property string artist: activePlayer ? MediaModel.clip(activePlayer.trackArtist) : ""
 
   property bool popupOpen: false
+
+  // "LIVE" pill shown where the time would be.
+  component LiveBadge: Rectangle {
+    property string family: ""
+    property int pixelSize: Style.font.caption
+    implicitWidth: liveText.implicitWidth + Style.space(8)
+    implicitHeight: liveText.implicitHeight + Style.space(2)
+    radius: height / 2
+    color: Color.urgent
+
+    Text {
+      id: liveText
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: "LIVE"
+      color: Color.background
+      font.family: parent.family
+      font.pixelSize: parent.pixelSize
+      font.bold: true
+    }
+  }
 
   // Small clickable glyph for the bar (previous / next). It only reports the
   // click; the widget-wide MouseArea below still handles everything else.
@@ -226,7 +250,7 @@ BarWidget {
   Timer {
     interval: 1000
     repeat: true
-    running: root.shown && root.prefs.showTime && root.activePlayer !== null && root.activePlayer.isPlaying
+    running: root.shown && root.prefs.showTime && !root.isLive && root.activePlayer !== null && root.activePlayer.isPlaying
     onTriggered: root.activePlayer.positionChanged()
   }
   onPopupOpenChanged: if (!popupOpen) settingsOpen = false
@@ -350,6 +374,12 @@ BarWidget {
       color: Qt.darker(root.bar.barForeground, 1.3)
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
+    }
+
+    LiveBadge {
+      anchors.verticalCenter: parent.verticalCenter
+      visible: !root.bar.vertical && root.prefs.showTime && root.isLive
+      family: root.bar.fontFamily
     }
   }
 
@@ -524,6 +554,28 @@ BarWidget {
           }
         }
 
+        // Live streams have no end to seek to: the badge plus a full,
+        // display-only track take the progress bar's place.
+        Row {
+          width: parent.width
+          spacing: Style.space(8)
+          visible: root.isLive
+
+          LiveBadge {
+            id: popupLiveBadge
+            anchors.verticalCenter: parent.verticalCenter
+            family: root.bar.fontFamily
+          }
+
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - popupLiveBadge.width - parent.spacing
+            height: Style.space(4)
+            radius: height / 2
+            color: Color.urgent
+          }
+        }
+
         Column {
           id: progress
           width: parent.width
@@ -531,7 +583,7 @@ BarWidget {
 
           readonly property bool available: root.activePlayer !== null
             && root.activePlayer.lengthSupported && root.activePlayer.positionSupported
-            && root.activePlayer.length > 0
+            && root.activePlayer.length > 0 && !root.isLive
           readonly property bool seekable: available && root.activePlayer.canSeek
           readonly property real length: available ? root.activePlayer.length : 0
           readonly property real position: available ? Math.max(0, Math.min(length, root.activePlayer.position)) : 0
